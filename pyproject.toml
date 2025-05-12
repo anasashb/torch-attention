@@ -32,10 +32,6 @@ line-length = 80
 [tool.isort]
 profile = "black"
 
-[tool.flake8]
-max-line-length = 80
-extend-ignore = ["E203", "W503"]
-
 [tool.mypy]
 ignore_missing_imports = true
 disallow_untyped_defs = true
