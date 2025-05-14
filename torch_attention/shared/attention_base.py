@@ -52,8 +52,9 @@ class AttentionBase(nn.Module):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Attention mask tensor of either
-                a 3D shape of [batch_size, num_queries, num_keys] or
+            mask (Tensor): Attention mask tensor of either:
+                a 2D shape of [num_queries, num_keys],
+                a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
@@ -66,6 +67,7 @@ class AttentionBase(nn.Module):
             "Forward must be implemented in a child class"
         )
 
+    # NOTE can be turned into @staticmethod too
     def _validate_shapes(
         self,
         query: Tensor,
@@ -84,8 +86,9 @@ class AttentionBase(nn.Module):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Attention mask tensor of either
-                a 3D shape of [batch_size, num_queries, num_keys] or
+            mask (Tensor): Attention mask tensor of either:
+                a 2D shape of [num_queries, num_keys],
+                a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
         Returns:
             None.
@@ -111,11 +114,68 @@ class AttentionBase(nn.Module):
             )
 
         if mask is not None and mask.shape not in [
+            (lq, lk),
             (bq, lq, lk),
             (bq, hq, lq, lk),
         ]:
             raise ValueError(
-                f"Invalid mask shape {mask.shape}, expected (batch_size, "
-                "num_queries, num_keys) or (batch_size, num_heads, "
-                "num_queries, num_keys)."
+                f"Invalid mask shape {mask.shape}, expected (num_queries, "
+                "num_keys), (batch_size, num_queries, num_keys), or "
+                "(batch_size, num_heads, num_queries, num_keys)."
             )
+
+    # NOTE can be turned into @staticmethod too
+    def _normalize_mask(
+        self,
+        mask: Tensor,
+        batch_size: int,
+        num_heads: int,
+    ) -> Tensor:
+        """
+        Adjusts mask shape from either 2D to 4D or 3D to 4D. Expands to
+        num_heads dimension on a 4D mask if needed.
+
+        If given mask dimension == 2, assumes it is [num_queries, num_keys].
+        First it unsqueezes to [1, 1, num_queries, num_keys] and then expands
+        to [batch_size, num_heads, num_queries, num_keys] to match the expected
+        shape of attention scores.
+
+        If given mask dimension == 3, assumes it is [batch_size, num_queries,
+        num_keys]. First it unsqueezes to [batch_size, 1, num_queries,
+        num_keys] and then expands to [batch_size, num_heads, num_queries,
+        num_keys] to match the expected shape of attention scores.
+
+        If given mask dimension == 4, and mask's second dimension == 1 but
+        num_heads != 1, assumes mask is provided as [batch_size, 1, num_queries,
+        num_keys] and expands it to [batch_size, num_heads, num_queries,
+        num_keys].
+
+        Args:
+            mask (Tensor): Attention mask tensor of either:
+                a 2D shape of [num_queries, num_keys],
+                a 3D shape of [batch_size, num_queries, num_keys], or
+                a 4D shape of [batch_size, num_heads, num_queries, num_keys].
+            batch_size (int): Batch size to expand the 2D masks to.
+            num_heads (int): Number of attention heads to expand the 2D / 3D /
+                4D masks to.
+
+        Returns:
+            mask (Tensor): Attention mask of shape [batch_size, num_heads,
+                num_queries, num_keys].
+
+        """
+        if mask.dim() == 2:
+            mask = mask.unsqueeze(0).unsqueeze(0)
+            mask = mask.expand(batch_size, num_heads, -1, -1)
+        elif mask.dim() == 3:
+            mask = mask.unsqueeze(1)
+            mask = mask.expand(-1, num_heads, -1, -1)
+        elif mask.dim() == 4:
+            if mask.shape[1] == 1 and num_heads != 1:
+                mask = mask.expand(-1, num_heads, -1, -1)
+            else:
+                pass
+        else:
+            raise ValueError(f"Mask must be 2D, 3D or 4D; got {mask.dim()}D")
+
+        return mask
