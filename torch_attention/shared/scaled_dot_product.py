@@ -9,7 +9,7 @@ from torch_attention.shared._attention_base import AttentionBase
 
 
 class ScaledDotProductAttention(AttentionBase):
-
+    # TODO docstring
     def _attend(
         self,
         query: Tensor,
@@ -23,9 +23,8 @@ class ScaledDotProductAttention(AttentionBase):
         Bq, Hq, Lq, _ = query.shape
         _, _, Lk, _ = key.shape
 
-        # TODO fix shape misalignment
         # Get raw scores
-        scores = torch.einsum("blhe,bshe->bhls", query, key)
+        scores = torch.einsum("bhle,bhse->bhls", query, key)
 
         # Apply mask if needed
         if self.use_mask:
@@ -46,6 +45,6 @@ class ScaledDotProductAttention(AttentionBase):
         # TODO if dropout handling somewhere here
 
         # Get attention outputs
-        attn_outputs = torch.einsum("bhls,bshd->blhd", attn_weights, value)
+        attn_outputs = torch.einsum("bhls,bhsd->bhld", attn_weights, value)
 
         return attn_outputs, attn_weights
