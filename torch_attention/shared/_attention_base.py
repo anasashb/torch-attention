@@ -157,30 +157,30 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             None.
         """
-        # Short-hand notations shapes
-        bq, hq, lq, dh = query.shape
-        bk, hk, lk, dh2 = key.shape
-        bv, hv, _, dh3 = value.shape
+        # Short-hand notations for shapes
+        Bq, Hq, Lq, Dhq = query.shape
+        Bk, Hk, Lk, Dhk = key.shape
+        Bv, Hv, _, Dhv = value.shape
 
-        if not (bq == bk == bv):
+        if not (Bq == Bk == Bv):
             raise ValueError(
                 "Batch size mismatch between Queries, Keys, Values tensors."
             )
-        if not (hq == hk == hv):
+        if not (Hq == Hk == Hv):
             raise ValueError(
                 "Attention heads count mismatch between Queries, Keys, Values "
                 "tensors."
             )
-        if not (dh == dh2 == dh3):
+        if not (Dhq == Dhk == Dhv):
             raise ValueError(
                 "Attention heads dimension mismatch between Queries, Keys, "
                 "Values, tensors."
             )
 
         if mask is not None and mask.shape not in [
-            (lq, lk),
-            (bq, lq, lk),
-            (bq, hq, lq, lk),
+            (Lq, Lk),
+            (Bq, Lq, Lk),
+            (Bq, Hq, Lq, Lk),
         ]:
             raise ValueError(
                 f"Invalid mask shape {mask.shape}, expected (num_queries, "
