@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from math import sqrt
 from typing import Optional, Tuple
 
 from torch import Tensor, nn
@@ -72,13 +73,25 @@ class AttentionBase(nn.Module, ABC):
             mask = self._normalize_mask(
                 mask=mask, batch_size=query.shape[0], num_heads=query.shape[1]
             )
+
+        # Generate scale factor if not provided
+        if self.scale_factor is not None:
+            scale_factor = self.scale_factor
+        else:
+            _, _, _, head_dim = key.shape
+            scale_factor = 1.0 / sqrt(head_dim)
+
         # Validate input shapes if using strict mode
         if self.strict_mode:
             self._validate_shapes(query=query, key=key, value=value, mask=mask)
 
         # Core computations
         attn_output, attn_weights = self._attend(
-            query=query, key=key, value=value, mask=mask
+            query=query,
+            key=key,
+            value=value,
+            scale_factor=scale_factor,
+            mask=mask,
         )
 
         return (
@@ -93,10 +106,22 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
+        scale_factor: float,
         mask: Optional[Tensor],
     ) -> Tuple[Tensor, Tensor]:
         """
         Core attention method that will be overriden in subclasses.
+
+        Args:
+            query (Tensor): Query tensor of shape [batch_size, num_heads,
+                num_queries, head_dim].
+            key (Tensor): Key tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_values, head_dim].
+            scale_factor (float): Scale factor to multiply raw scores by.
+            mask (Tensor): Attention mask tensor of shape [batch_size,
+                num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
