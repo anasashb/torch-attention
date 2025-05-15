@@ -32,7 +32,9 @@ class AttentionBase(nn.Module, ABC):
     ):
         super().__init__()
         self.use_mask = use_mask
-        self.dropout = nn.Dropout(dropout_rate) if dropout_rate > 0 else None
+        self.dropout = (
+            nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity()
+        )
         self.output_attention_scores = output_attention_scores
         self.strict_mode = strict_mode
         self.scale_factor = scale_factor
@@ -45,10 +47,10 @@ class AttentionBase(nn.Module, ABC):
         mask: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
         """
-        Forward method to pass down to child classes. Includes shared logic
-        such as mask shape normalization (adjustment), Q, K, V, mask shape
-        validation. Attention computation is then delegated to the abstract
-        _attend method.
+        Forward method inherited by all child classes of AttentionBase.
+        Includes shared logic such as mask shape normalization (adjustment),
+        Q, K, V, mask shape validation. Attention computation is then
+        delegated to the abstract ._attend() method.
 
         Args:
             query (Tensor): Query tensor of shape [batch_size, num_heads,
