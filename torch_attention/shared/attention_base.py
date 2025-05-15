@@ -1,9 +1,10 @@
+from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
 from torch import Tensor, nn
 
 
-class AttentionBase(nn.Module):
+class AttentionBase(nn.Module, ABC):
     """
     Base class for all attention modules in this package.
 
@@ -11,27 +12,27 @@ class AttentionBase(nn.Module):
         use_mask (bool): Whether forward() should expect and (even if not
             provided) apply an attention mask.
         dropout_rate (float): Dropout rate.
-        output_attention (bool): Whether forward() should return attention
-            weights.
+        output_attention_scores (bool): Whether forward() should return
+            attention weights.
         strict_mode (bool): Whether to explicitly validate tensor shapes
             at each forward call.
         scale_factor (Optional[float]): Custom attention scaling factor.
 
-    Child classes must implement forward().
+    Child classes must implement _attend().
     """
 
     def __init__(
         self,
         use_mask: bool = False,
         dropout_rate: float = 0.0,
-        output_attention: bool = False,
+        output_attention_scores: bool = False,
         strict_mode: bool = True,
         scale_factor: Optional[float] = None,
     ):
         super().__init__()
         self.use_mask = use_mask
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate > 0 else None
-        self.output_attention = output_attention
+        self.output_attention_scores = output_attention_scores
         self.strict_mode = strict_mode
         self.scale_factor = scale_factor
 
@@ -43,7 +44,10 @@ class AttentionBase(nn.Module):
         mask: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
         """
-        Forward pass of the attention mechanism.
+        Forward method to pass down to child classes. Includes shared logic
+        such as mask shape normalization (adjustment), Q, K, V, mask shape
+        validation. Attention computation is then delegated to the abstract
+        _attend method.
 
         Args:
             query (Tensor): Query tensor of shape [batch_size, num_heads,
@@ -58,14 +62,49 @@ class AttentionBase(nn.Module):
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
-            y (Tensor): Attention output tensor of shape [batch_size, num_heads,
-                num_queries, head_dim].
+            attn_output (Tensor): Attention output tensor of shape [batch_size,
+                num_heads, num_queries, head_dim].
             attn_weights (Optional[Tensor]): Attention weights tensor of shape
                 [batch_size, num_heads, num_queries, num_keys].
         """
-        raise NotImplementedError(
-            "Forward must be implemented in a child class"
+        # Adjust mask shape if mask should be used and is provided
+        if self.use_mask and mask is not None:
+            mask = self._normalize_mask(
+                mask=mask, batch_size=query.shape[0], num_heads=query.shape[1]
+            )
+        # Validate input shapes if using strict mode
+        if self.strict_mode:
+            self._validate_shapes(query=query, key=key, value=value, mask=mask)
+
+        # Core computations
+        attn_output, attn_weights = self._attend(
+            query=query, key=key, value=value, mask=mask
         )
+
+        return (
+            (attn_output, attn_weights)
+            if self.output_attention_scores
+            else (attn_output, None)
+        )
+
+    @abstractmethod
+    def _attend(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        mask: Optional[Tensor],
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Core attention method that will be overriden in subclasses.
+
+        Returns:
+            attn_output (Tensor): Attention output tensor of shape [batch_size,
+                num_heads, num_queries, head_dim].
+            attn_weights (Tensor): Attention weights tensor of shape
+                [batch_size, num_heads, num_queries, num_keys].
+        """
+        raise NotImplementedError("Subclasses must implement _attend()")
 
     # NOTE can be turned into @staticmethod too
     def _validate_shapes(
