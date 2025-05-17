@@ -17,7 +17,7 @@ class AttentionBase(nn.Module, ABC):
             attention weights.
         strict_mode (bool): Whether to explicitly validate tensor shapes
             at each forward call.
-        scale_factor (Optional[float]): Custom attention scaling factor.
+        custom_scale_factor (Optional[float]): Custom attention scaling factor.
 
     Child classes must implement _attend().
     """
@@ -28,7 +28,7 @@ class AttentionBase(nn.Module, ABC):
         dropout_rate: float = 0.0,
         output_attention_scores: bool = False,
         strict_mode: bool = True,
-        scale_factor: Optional[float] = None,
+        custom_scale_factor: Optional[float] = None,
     ):
         super().__init__()
         self.use_mask = use_mask
@@ -37,7 +37,7 @@ class AttentionBase(nn.Module, ABC):
         )
         self.output_attention_scores = output_attention_scores
         self.strict_mode = strict_mode
-        self.scale_factor = scale_factor
+        self.custom_scale_factor = custom_scale_factor
 
     def forward(
         self,
@@ -77,7 +77,7 @@ class AttentionBase(nn.Module, ABC):
             )
 
         # Generate scale factor if not provided
-        if self.scale_factor is not None:
+        if self.custom_scale_factor is not None:
             scale_factor = self.scale_factor
         else:
             _, _, _, head_dim = key.shape

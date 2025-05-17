@@ -20,7 +20,7 @@ class ScaledDotProductAttention(AttentionBase):
             attention weights.
         strict_mode (bool): Whether to explicitly validate tensor shapes
             at each forward call.
-        scale_factor (Optional[float]): Custom attention scaling factor.
+        custom_scale_factor (Optional[float]): Custom attention scaling factor.
     """
 
     def _attend(
