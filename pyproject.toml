@@ -1,0 +1,40 @@
+[project]
+name = "torch-attention"
+version = "0.1.0"
+description = "A unified package for PyTorch-based attention mechanisms from across domains"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Bachana Anasashvili", email = "ba.anasashvili@gmail.com" },
+]
+
+dependencies = [
+  "torch>=2.0,<3.0",
+  "numpy (>=2.2.5,<3.0.0)",
+]
+
+[project.optional-dependencies]
+dev = [
+  "black>=25.1.0",
+  "pytest>=8.3.5",
+  "isort>=6.0.1",
+  "mypy>=1.15.0",
+  "flake8>=7.2.0",
+  "matplotlib (>=3.10.3,<4.0.0)",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 80
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+ignore_missing_imports = true
+disallow_untyped_defs = true
+
