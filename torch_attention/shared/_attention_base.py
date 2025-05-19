@@ -78,7 +78,7 @@ class AttentionBase(nn.Module, ABC):
 
         # Generate scale factor if not provided
         if self.custom_scale_factor is not None:
-            scale_factor = self.scale_factor
+            scale_factor = self.custom_scale_factor
         else:
             _, _, _, head_dim = key.shape
             scale_factor = 1.0 / sqrt(head_dim)
