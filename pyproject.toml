@@ -10,18 +10,52 @@ authors = [
 ]
 
 dependencies = [
-  "torch>=2.0,<3.0",
-  "numpy (>=2.2.5,<3.0.0)",
+    "numpy>=2.2.5,<3.0.0",
+    "torch>=2.9.1",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-  "black>=25.1.0",
-  "pytest>=8.3.5",
-  "isort>=6.0.1",
-  "mypy>=1.15.0",
-  "flake8>=7.2.0",
-  "matplotlib (>=3.10.3,<4.0.0)",
+    "ipykernel>=7.1.0",
+]
+test = [
+    "black>=25.12.0",
+    "isort>=7.0.0",
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.13",
+]
+torch-cpu = [
+    "torch>=2.9.1",
+]
+torch-cuda = [
+    "torch>=2.9.1",
+]
+
+[tool.uv]
+default-groups = ["torch-cpu"]
+conflicts = [
+    [
+        { group = "torch-cpu" },
+        { group = "torch-cuda" },
+    ],
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", group = "torch-cpu" },
+    { index = "pytorch-cu126", group = "torch-cuda" },
 ]
 
 [build-system]
