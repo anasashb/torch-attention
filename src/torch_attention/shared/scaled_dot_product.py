@@ -1,5 +1,3 @@
-from typing import Optional, Tuple
-
 import torch
 from torch import Tensor
 
@@ -29,8 +27,8 @@ class ScaledDotProductAttention(AttentionBase):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Optional[Tensor],
-    ) -> Tuple[Tensor, Tensor]:
+        mask: Tensor | None,
+    ) -> tuple[Tensor, Tensor]:
         """
         Attention computations of the conventional scaled dot-product. This
         method will be called by the .forward() method inherited from the

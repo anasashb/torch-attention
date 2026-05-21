@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from math import sqrt
-from typing import Optional, Tuple
 
 from torch import Tensor, nn
 
@@ -28,8 +27,8 @@ class AttentionBase(nn.Module, ABC):
         dropout_rate: float = 0.0,
         output_attention_scores: bool = False,
         strict_mode: bool = True,
-        custom_scale_factor: Optional[float] = None,
-    ):
+        custom_scale_factor: float | None = None,
+    ) -> None:
         super().__init__()
         self.use_mask = use_mask
         self.dropout = (
@@ -44,8 +43,8 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mask: Optional[Tensor] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
+        mask: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor | None]:
         """
         Forward method inherited by all child classes of AttentionBase.
         Includes shared logic such as mask shape normalization (adjustment),
@@ -109,8 +108,8 @@ class AttentionBase(nn.Module, ABC):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Optional[Tensor],
-    ) -> Tuple[Tensor, Tensor]:
+        mask: Tensor | None,
+    ) -> tuple[Tensor, Tensor]:
         """
         Core attention method that will be overriden in subclasses.
 
@@ -139,7 +138,7 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mask: Optional[Tensor],
+        mask: Tensor | None,
     ) -> None:
         """
         Validates shapes of the Query, Key, Value and optional attention mask
