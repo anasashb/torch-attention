@@ -1,6 +1,6 @@
 [project]
 name = "torch-attention"
-version = "0.1.0"
+version = "0.1.1"
 description = "A unified package for PyTorch-based attention mechanisms from across domains"
 readme = "README.md"
 requires-python = ">=3.11"
