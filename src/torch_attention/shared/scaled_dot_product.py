@@ -8,9 +8,16 @@ from torch_attention.shared._attention_base import AttentionBase
 
 class ScaledDotProductAttention(AttentionBase):
     """
-    Conventional scaled dot-product attention. Inherits .forward() and instance
-    arguments from AttentionBase, implements custom ._attend() method called
-    in .forward().
+    Scaled dot-product attention with selectable computation backends.
+
+    The "einsum" backend computes attention explicitly with PyTorch tensor
+    operations and can return attention weights. The "sdpa" backend delegates
+    to torch.nn.functional.scaled_dot_product_attention, which can use
+    optimized PyTorch kernels depending on the device, dtype, mask, and runtime
+    configuration. Use "sdpa" when attention weights are not needed.
+
+    Attention masks must be torch.bool tensors. True marks positions that
+    should be masked out, and False marks positions that can be attended to.
 
     Args:
         use_mask (bool): Whether forward() should expect and (even if not
@@ -23,8 +30,9 @@ class ScaledDotProductAttention(AttentionBase):
         custom_scale_factor (Optional[float]): Custom attention scaling factor.
         backend (AttentionBackend): Attention implementation to use. The
             "einsum" backend returns attention outputs and optionally attention
-            weights. The "sdpa" backend uses PyTorch's native scaled dot-product
-            attention and cannot return attention weights.
+            weights. The "sdpa" backend delegates to PyTorch's native
+            scaled dot-product attention implementation and cannot return
+            attention weights.
     """
 
     def __init__(
@@ -66,9 +74,7 @@ class ScaledDotProductAttention(AttentionBase):
         mask: Tensor | None,
     ) -> tuple[Tensor, Tensor | None]:
         """
-        Attention computations of the conventional scaled dot-product. This
-        method will be called by the .forward() method inherited from the
-        AttentionBase class.
+        Routes scaled dot-product attention to the configured backend.
 
         Args:
             query (Tensor): Query tensor of shape [batch_size, num_heads,
@@ -170,6 +176,10 @@ class ScaledDotProductAttention(AttentionBase):
     ) -> tuple[Tensor, None]:
         """
         Computes attention with PyTorch's native SDPA implementation.
+
+        Boolean masks are inverted before being passed to PyTorch SDPA because
+        here we use True for masked positions, while PyTorch SDPA uses
+        True for positions that can be attended to.
 
         Args:
             query (Tensor): Query tensor of shape [batch_size, num_heads,
