@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from math import sqrt
 
+import torch
 from torch import Tensor, nn
 
 
@@ -58,10 +59,13 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Attention mask tensor of either:
+            mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
+                Only torch.bool masks are supported. True marks positions that
+                should be masked out, and False marks positions that can be
+                attended to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -121,8 +125,10 @@ class AttentionBase(nn.Module, ABC):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            mask (Tensor): Boolean attention mask tensor of shape [batch_size,
+                num_heads, num_queries, num_keys]. True marks positions that
+                should be masked out, and False marks positions that can be
+                attended to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -151,10 +157,13 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Attention mask tensor of either:
+            mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
+                Only torch.bool masks are supported. True marks positions that
+                should be masked out, and False marks positions that can be
+                attended to.
         Returns:
             None.
         """
@@ -188,6 +197,13 @@ class AttentionBase(nn.Module, ABC):
                 "num_keys), (batch_size, num_queries, num_keys), or "
                 "(batch_size, num_heads, num_queries, num_keys)."
             )
+        if mask is not None and mask.dtype != torch.bool:
+            raise TypeError(
+                "Only boolean attention masks are supported; "
+                f"got mask dtype {mask.dtype}. Use a torch.bool mask with "
+                "True for positions that should be masked out and False for "
+                "positions that can be attended to."
+            )
 
     # NOTE can be turned into @staticmethod too
     def _normalize_mask(
@@ -216,10 +232,13 @@ class AttentionBase(nn.Module, ABC):
         num_keys].
 
         Args:
-            mask (Tensor): Attention mask tensor of either:
+            mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
+                Only torch.bool masks are supported. True marks positions that
+                should be masked out, and False marks positions that can be
+                attended to.
             batch_size (int): Batch size to expand the 2D masks to.
             num_heads (int): Number of attention heads to expand the 2D / 3D /
                 4D masks to.
