@@ -138,9 +138,8 @@ class AttentionBase(nn.Module, ABC):
         """
         raise NotImplementedError("Subclasses must implement _attend()")
 
-    # NOTE can be turned into @staticmethod too
+    @staticmethod
     def _validate_shapes(
-        self,
         query: Tensor,
         key: Tensor,
         value: Tensor,
@@ -205,9 +204,8 @@ class AttentionBase(nn.Module, ABC):
                 "positions that can be attended to."
             )
 
-    # NOTE can be turned into @staticmethod too
+    @staticmethod
     def _normalize_mask(
-        self,
         mask: Tensor,
         batch_size: int,
         num_heads: int,
