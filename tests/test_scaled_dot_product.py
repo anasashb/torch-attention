@@ -143,3 +143,20 @@ def test_scaled_dot_product_rejects_invalid_backend() -> None:
     """Checks that unknown attention backends fail fast."""
     with pytest.raises(ValueError, match="Invalid backend"):
         ScaledDotProductAttention(backend="supermaxx")
+
+
+def test_scaled_dot_product_requires_boolean_mask(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that attention masks must use torch.bool dtype."""
+    query, key, value = make_qkv()
+    mask = torch.zeros(query.shape[-2], key.shape[-2], dtype=torch.float32)
+    attention = ScaledDotProductAttention(
+        use_mask=True,
+        strict_mode=True,
+    )
+
+    with pytest.raises(
+        TypeError, match="Only boolean attention masks are supported"
+    ):
+        attention(query=query, key=key, value=value, mask=mask)
