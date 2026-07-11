@@ -109,7 +109,7 @@ class AttentionBase(nn.Module, ABC):
         value: Tensor,
         scale_factor: float,
         mask: Tensor | None,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor | None]:
         """
         Core attention method that will be overriden in subclasses.
 
@@ -127,7 +127,7 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Tensor): Attention weights tensor of shape
+            attn_weights (Optional[Tensor]): Attention weights tensor of shape
                 [batch_size, num_heads, num_queries, num_keys].
         """
         raise NotImplementedError("Subclasses must implement _attend()")
