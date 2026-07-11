@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-07-11
+
+### Added
+
+- Added an `sdpa` backend for `ScaledDotProductAttention`, delegating to
+  PyTorch's native scaled dot-product attention implementation.
+- Exported `ScaledDotProductAttention` from the package root.
+
+### Changed
+
+- Documented selectable scaled dot-product attention backends.
+- Made attention validation helpers static methods.
+
+### Fixed
+
+- Required attention masks to use `torch.bool` so mask semantics stay
+  consistent across backends.
+- Used the distribution name when reading package version metadata.
+
 ## [0.1.1] - 2026-05-22
 
 ### Changed
@@ -22,4 +41,3 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Removed
 
 - Removed flake8 configuration.
-

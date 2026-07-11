@@ -1892,7 +1892,7 @@ wheels = [
 
 [[package]]
 name = "torch-attention"
-version = "0.1.1"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
