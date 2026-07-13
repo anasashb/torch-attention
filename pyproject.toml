@@ -1,5 +1,5 @@
 [project]
-name = "torch-attention"
+name = "adlers"
 version = "0.2.0"
 description = "A unified package for PyTorch-based attention mechanisms from across domains"
 readme = "README.md"
