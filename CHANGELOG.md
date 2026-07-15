@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-07-15
+
+### Changed
+
+- Renamed the distribution from `torch-attention` to `adlers`.
+- Renamed the Python import package from `torch_attention` to `adlers`.
+- Rebranded the project as ADLERS.
+
 ## [0.2.0] - 2026-07-11
 
 ### Added
