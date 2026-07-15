@@ -1,6 +1,6 @@
 [project]
-name = "torch-attention"
-version = "0.2.0"
+name = "adlers"
+version = "0.3.0"
 description = "A unified package for PyTorch-based attention mechanisms from across domains"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -63,7 +63,7 @@ requires = ["uv_build>=0.9.26,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = ["torch_attention"]
+module-name = ["adlers"]
 module-root = "src"
 source-include = ["src"]
 source-exclude = [
@@ -91,6 +91,6 @@ warn_redundant_casts = true
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = [
-    "--cov=torch_attention",
+    "--cov=adlers",
     "--cov-report=term-missing",
 ]

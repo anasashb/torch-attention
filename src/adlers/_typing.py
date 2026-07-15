@@ -1,4 +1,4 @@
-"""Internal typing helpers for torch-attention."""
+"""Internal typing helpers for ADLERS."""
 
 from typing import Literal, TypeAlias
 

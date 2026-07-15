@@ -2,8 +2,8 @@ import pytest
 import torch
 import torch.nn.functional as F
 
+from adlers.shared import ScaledDotProductAttention
 from tests._typing import MakeQKV
-from torch_attention.shared import ScaledDotProductAttention
 
 
 @pytest.mark.parametrize("use_mask", [False, True])
