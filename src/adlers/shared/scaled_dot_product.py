@@ -192,6 +192,11 @@ class ScaledDotProductAttention(AttentionBase):
         """
         is_causal = self.is_causal
 
+        # torch does not allow using both causal and a custom mask
+        # https://docs.pytorch.org/docs/main/generated/torch.nn.functional.scaled_dot_product_attention.html
+        # here, if user wants both, we generate the combination ourself and
+        # feed it to F.scaled_dot_product_attention as an explicit custom mask
+        # and is_causal=False
         if attn_mask is not None:
             if self.is_causal:
                 causal_mask = self._make_causal_mask(
