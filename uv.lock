@@ -18,13 +18,13 @@ conflicts = [[
 
 [[package]]
 name = "adlers"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
-    { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
     { name = "torch", version = "2.12.0", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (extra != 'group-6-adlers-torch-cpu' and extra != 'group-6-adlers-torch-cuda')" },
-    { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
     { name = "torch", version = "2.12.0+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "extra == 'group-6-adlers-torch-cuda'" },
 ]
 
@@ -41,8 +41,8 @@ test = [
     { name = "ruff" },
 ]
 torch-cpu = [
-    { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
 ]
 torch-cuda = [
     { name = "torch", version = "2.12.0+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" } },
@@ -1776,17 +1776,16 @@ name = "torch"
 version = "2.12.0"
 source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
-    "python_full_version >= '3.15' and sys_platform == 'darwin'",
     "python_full_version < '3.15' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "fsspec", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "jinja2", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "networkx", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "setuptools", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "sympy", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "typing-extensions", marker = "(sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "filelock", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "fsspec", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "jinja2", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "networkx", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "setuptools", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "sympy", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "typing-extensions", marker = "(python_full_version < '3.15' and sys_platform == 'darwin' and extra == 'group-6-adlers-torch-cpu') or (python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.12.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:10802fd383bbfed646212e765a72c37d2185205d4f26eb197a254e8ac7ddcb25", upload-time = "2026-05-12T16:20:07Z" },
@@ -1856,15 +1855,16 @@ source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform != 'darwin'",
     "python_full_version < '3.15' and sys_platform != 'darwin'",
+    "python_full_version >= '3.15' and sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "fsspec", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "jinja2", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "networkx", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "setuptools", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "sympy", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
-    { name = "typing-extensions", marker = "(sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu') or (extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda')" },
+    { name = "filelock", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
+    { name = "fsspec", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
+    { name = "jinja2", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
+    { name = "networkx", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
+    { name = "setuptools", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
+    { name = "sympy", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
+    { name = "typing-extensions", marker = "(python_full_version >= '3.15' and extra == 'group-6-adlers-torch-cpu') or (python_full_version < '3.15' and extra == 'group-6-adlers-torch-cpu' and extra == 'group-6-adlers-torch-cuda') or (sys_platform != 'darwin' and extra == 'group-6-adlers-torch-cpu')" },
 ]
 wheels = [
     { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.12.0%2Bcpu-cp311-cp311-linux_s390x.whl", hash = "sha256:aaa9c1f5e8c518d7be1e3c3e1b090ca7d63b6e353a1abd6cfdaf902405093467", upload-time = "2026-05-12T23:16:01Z" },
