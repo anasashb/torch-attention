@@ -10,8 +10,8 @@ class AttentionBase(nn.Module, ABC):
     Base class for all attention modules in this package.
 
     Args:
-        use_mask (bool): Whether forward() should expect and (even if not
-            provided) apply an attention mask.
+        is_causal (bool): Whether to prevent queries from attending to future
+            key positions.
         dropout_rate (float): Dropout rate.
         output_attention_scores (bool): Whether forward() should return
             attention weights.
@@ -24,14 +24,14 @@ class AttentionBase(nn.Module, ABC):
 
     def __init__(
         self,
-        use_mask: bool = False,
+        is_causal: bool = False,
         dropout_rate: float = 0.0,
         output_attention_scores: bool = False,
         strict_mode: bool = True,
         custom_scale_factor: float | None = None,
     ) -> None:
         super().__init__()
-        self.use_mask = use_mask
+        self.is_causal = is_causal
         self.dropout = (
             nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity()
         )
@@ -44,7 +44,7 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mask: Tensor | None = None,
+        attn_mask: Tensor | None = None,
     ) -> tuple[Tensor, Tensor | None]:
         """
         Forward method inherited by all child classes of AttentionBase.
@@ -59,7 +59,7 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Boolean attention mask tensor of either:
+            attn_mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
@@ -73,10 +73,12 @@ class AttentionBase(nn.Module, ABC):
             attn_weights (Optional[Tensor]): Attention weights tensor of shape
                 [batch_size, num_heads, num_queries, num_keys].
         """
-        # Adjust mask shape if mask should be used and is provided
-        if self.use_mask and mask is not None:
-            mask = self._normalize_mask(
-                mask=mask, batch_size=query.shape[0], num_heads=query.shape[1]
+        if attn_mask is not None:
+            self._validate_attn_mask_dtype(attn_mask=attn_mask)
+            attn_mask = self._normalize_attn_mask(
+                attn_mask=attn_mask,
+                batch_size=query.shape[0],
+                num_heads=query.shape[1],
             )
 
         # Generate scale factor if not provided
@@ -88,7 +90,12 @@ class AttentionBase(nn.Module, ABC):
 
         # Validate input shapes if using strict mode
         if self.strict_mode:
-            self._validate_shapes(query=query, key=key, value=value, mask=mask)
+            self._validate_shapes(
+                query=query,
+                key=key,
+                value=value,
+                attn_mask=attn_mask,
+            )
 
         # Core computations
         attn_output, attn_weights = self._attend(
@@ -96,7 +103,7 @@ class AttentionBase(nn.Module, ABC):
             key=key,
             value=value,
             scale_factor=scale_factor,
-            mask=mask,
+            attn_mask=attn_mask,
         )
 
         return (
@@ -112,7 +119,7 @@ class AttentionBase(nn.Module, ABC):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> tuple[Tensor, Tensor | None]:
         """
         Core attention method that will be overriden in subclasses.
@@ -125,10 +132,10 @@ class AttentionBase(nn.Module, ABC):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            mask (Tensor): Boolean attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys]. True marks positions that
-                should be masked out, and False marks positions that can be
-                attended to.
+            attn_mask (Tensor): Boolean attention mask tensor of shape
+                [batch_size, num_heads, num_queries, num_keys]. True marks
+                positions that should be masked out, and False marks positions
+                that can be attended to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -143,7 +150,7 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> None:
         """
         Validates shapes of the Query, Key, Value and optional attention mask
@@ -156,7 +163,7 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Boolean attention mask tensor of either:
+            attn_mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
@@ -186,27 +193,32 @@ class AttentionBase(nn.Module, ABC):
                 "Values, tensors."
             )
 
-        if mask is not None and mask.shape not in [
+        if attn_mask is not None and attn_mask.shape not in [
             (Lq, Lk),
             (Bq, Lq, Lk),
             (Bq, Hq, Lq, Lk),
         ]:
             raise ValueError(
-                f"Invalid mask shape {mask.shape}, expected (num_queries, "
-                "num_keys), (batch_size, num_queries, num_keys), or "
-                "(batch_size, num_heads, num_queries, num_keys)."
-            )
-        if mask is not None and mask.dtype != torch.bool:
-            raise TypeError(
-                "Only boolean attention masks are supported; "
-                f"got mask dtype {mask.dtype}. Use a torch.bool mask with "
-                "True for positions that should be masked out and False for "
-                "positions that can be attended to."
+                f"Invalid mask shape {attn_mask.shape}, expected "
+                "(num_queries, num_keys), (batch_size, num_queries, "
+                "num_keys), or (batch_size, num_heads, num_queries, "
+                "num_keys)."
             )
 
     @staticmethod
-    def _normalize_mask(
-        mask: Tensor,
+    def _validate_attn_mask_dtype(attn_mask: Tensor) -> None:
+        """Validates that an attention mask follows ADLERS semantics."""
+        if attn_mask.dtype != torch.bool:
+            raise TypeError(
+                "Only boolean attention masks are supported; "
+                f"got mask dtype {attn_mask.dtype}. Use a torch.bool mask "
+                "with True for positions that should be masked out and "
+                "False for positions that can be attended to."
+            )
+
+    @staticmethod
+    def _normalize_attn_mask(
+        attn_mask: Tensor,
         batch_size: int,
         num_heads: int,
     ) -> Tensor:
@@ -230,7 +242,7 @@ class AttentionBase(nn.Module, ABC):
         num_keys].
 
         Args:
-            mask (Tensor): Boolean attention mask tensor of either:
+            attn_mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
                 a 4D shape of [batch_size, num_heads, num_queries, num_keys].
@@ -242,22 +254,54 @@ class AttentionBase(nn.Module, ABC):
                 4D masks to.
 
         Returns:
-            mask (Tensor): Attention mask of shape [batch_size, num_heads,
-                num_queries, num_keys].
+            attn_mask (Tensor): Attention mask of shape [batch_size,
+                num_heads, num_queries, num_keys].
 
         """
-        if mask.dim() == 2:
-            mask = mask.unsqueeze(0).unsqueeze(0)
-            mask = mask.expand(batch_size, num_heads, -1, -1)
-        elif mask.dim() == 3:
-            mask = mask.unsqueeze(1)
-            mask = mask.expand(-1, num_heads, -1, -1)
-        elif mask.dim() == 4:
-            if mask.shape[1] == 1 and num_heads != 1:
-                mask = mask.expand(-1, num_heads, -1, -1)
+        if attn_mask.dim() == 2:
+            attn_mask = attn_mask.unsqueeze(0).unsqueeze(0)
+            attn_mask = attn_mask.expand(batch_size, num_heads, -1, -1)
+        elif attn_mask.dim() == 3:
+            attn_mask = attn_mask.unsqueeze(1)
+            attn_mask = attn_mask.expand(-1, num_heads, -1, -1)
+        elif attn_mask.dim() == 4:
+            if attn_mask.shape[1] == 1 and num_heads != 1:
+                attn_mask = attn_mask.expand(-1, num_heads, -1, -1)
             else:
                 pass
         else:
-            raise ValueError(f"Mask must be 2D, 3D or 4D; got {mask.dim()}D")
+            raise ValueError(
+                "Attention mask must be 2D, 3D or 4D; "
+                f"got {attn_mask.dim()}D."
+            )
 
-        return mask
+        return attn_mask
+
+    def _combine_with_causal_mask(
+        self,
+        query: Tensor,
+        key: Tensor,
+        attn_mask: Tensor | None,
+    ) -> Tensor | None:
+        """Combines an explicit attention mask with causal restrictions."""
+        if not self.is_causal:
+            return attn_mask
+
+        causal_mask = self._make_causal_mask(query=query, key=key)
+        if attn_mask is None:
+            return causal_mask
+
+        return causal_mask | attn_mask
+
+    @staticmethod
+    def _make_causal_mask(query: Tensor, key: Tensor) -> Tensor:
+        """Creates a causal mask for the query and key sequence lengths."""
+        return torch.triu(
+            torch.ones(
+                query.shape[-2],
+                key.shape[-2],
+                dtype=torch.bool,
+                device=query.device,
+            ),
+            diagonal=1,
+        )
