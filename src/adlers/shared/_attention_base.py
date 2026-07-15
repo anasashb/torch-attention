@@ -208,6 +208,8 @@ class AttentionBase(nn.Module, ABC):
     @staticmethod
     def _validate_attn_mask_dtype(attn_mask: Tensor) -> None:
         """Validates that an attention mask follows ADLERS semantics."""
+        # NOTE: for now only allowing boolean masks, may extend support to
+        # float masks once/if repo is (ever) more mature
         if attn_mask.dtype != torch.bool:
             raise TypeError(
                 "Only boolean attention masks are supported; "
