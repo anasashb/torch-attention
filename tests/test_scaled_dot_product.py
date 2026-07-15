@@ -101,15 +101,28 @@ def test_sdpa_backend_matches_torch_scaled_dot_product_attention(
     torch.testing.assert_close(out, expected_out)
 
 
-def test_sdpa_backend_matches_einsum_backend_with_explicit_mask(
+@pytest.mark.parametrize(
+    "attn_mask_shape",
+    [
+        (4, 4),
+        (2, 4, 4),
+        (2, 1, 4, 4),
+        (2, 3, 4, 4),
+    ],
+)
+def test_scaled_dot_product_supports_mask_broadcasting(
+    attn_mask_shape: tuple[int, ...],
     make_qkv: MakeQKV,
 ) -> None:
-    """Checks that explicit masks have matching semantics across backends."""
-    query, key, value = make_qkv(batch_size=2, num_heads=3)
-    num_queries = query.shape[-2]
-    num_keys = key.shape[-2]
-    attn_mask = torch.zeros(num_queries, num_keys, dtype=torch.bool)
-    attn_mask[:, -1] = True
+    """Checks supported mask shapes and semantics across both backends."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=3,
+        num_queries=4,
+        num_keys=4,
+    )
+    attn_mask = torch.zeros(attn_mask_shape, dtype=torch.bool)
+    attn_mask[..., -1] = True
 
     einsum_attention = ScaledDotProductAttention(
         is_causal=False,
