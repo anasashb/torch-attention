@@ -1,6 +1,6 @@
 from importlib.metadata import PackageNotFoundError, version
 
-from torch_attention.shared import ScaledDotProductAttention
+from adlers.shared import ScaledDotProductAttention
 
 __all__ = ["ScaledDotProductAttention", "__version__"]
 

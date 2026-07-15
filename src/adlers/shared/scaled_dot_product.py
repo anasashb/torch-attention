@@ -2,8 +2,8 @@ import torch
 from torch import Tensor
 from torch.nn import functional as F
 
-from torch_attention._typing import AttentionBackend
-from torch_attention.shared._attention_base import AttentionBase
+from adlers._typing import AttentionBackend
+from adlers.shared._attention_base import AttentionBase
 
 
 class ScaledDotProductAttention(AttentionBase):
