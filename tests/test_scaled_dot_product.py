@@ -225,6 +225,34 @@ def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
     torch.testing.assert_close(out, expected_out)
 
 
+def test_scaled_dot_product_rejects_unequal_key_and_value_lengths(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that each key position must have a corresponding value."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+    )
+    value = value[..., :-1, :]
+    attention = ScaledDotProductAttention(
+        backend="einsum",
+        strict_mode=True,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Key and value sequence lengths must match",
+    ):
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+
 def test_scaled_dot_product_combines_causal_and_explicit_masks(
     make_qkv: MakeQKV,
 ) -> None:
