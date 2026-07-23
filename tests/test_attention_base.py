@@ -20,10 +20,6 @@ def test_attention_base_preserves_broadcastable_mask_shapes(
     """Checks that mask normalization avoids unnecessary expansion."""
     attn_mask = torch.zeros(attn_mask_shape, dtype=torch.bool)
 
-    normalized_mask = AttentionBase._normalize_attn_mask(
-        attn_mask=attn_mask,
-        batch_size=2,
-        num_heads=3,
-    )
+    normalized_mask = AttentionBase._normalize_attn_mask(attn_mask=attn_mask)
 
     assert normalized_mask.shape == expected_shape

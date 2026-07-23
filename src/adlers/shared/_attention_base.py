@@ -75,11 +75,7 @@ class AttentionBase(nn.Module, ABC):
         """
         if attn_mask is not None:
             self._validate_attn_mask_dtype(attn_mask=attn_mask)
-            attn_mask = self._normalize_attn_mask(
-                attn_mask=attn_mask,
-                batch_size=query.shape[0],
-                num_heads=query.shape[1],
-            )
+            attn_mask = self._normalize_attn_mask(attn_mask=attn_mask)
 
         # Generate scale factor if not provided
         if self.custom_scale_factor is not None:
@@ -195,12 +191,12 @@ class AttentionBase(nn.Module, ABC):
 
         if attn_mask is not None and attn_mask.shape not in [
             (Lq, Lk),
-            (Bq, Lq, Lk),
+            (Bq, 1, Lq, Lk),
             (Bq, Hq, Lq, Lk),
         ]:
             raise ValueError(
                 f"Invalid mask shape {attn_mask.shape}, expected "
-                "(num_queries, num_keys), (batch_size, num_queries, "
+                "(num_queries, num_keys), (batch_size, 1, num_queries, "
                 "num_keys), or (batch_size, num_heads, num_queries, "
                 "num_keys)."
             )
@@ -219,59 +215,36 @@ class AttentionBase(nn.Module, ABC):
             )
 
     @staticmethod
-    def _normalize_attn_mask(
-        attn_mask: Tensor,
-        batch_size: int,
-        num_heads: int,
-    ) -> Tensor:
+    def _normalize_attn_mask(attn_mask: Tensor) -> Tensor:
         """
-        Adjusts mask shape from either 2D to 4D or 3D to 4D. Expands to
-        num_heads dimension on a 4D mask if needed.
+        Preserves broadcastable mask shapes for attention operations.
 
-        If given mask dimension == 2, assumes it is [num_queries, num_keys].
-        First it unsqueezes to [1, 1, num_queries, num_keys] and then expands
-        to [batch_size, num_heads, num_queries, num_keys] to match the expected
-        shape of attention scores.
+        A 2D mask of shape [num_queries, num_keys] is kept unchanged and
+        broadcasts across batches and heads.
 
-        If given mask dimension == 3, assumes it is [batch_size, num_queries,
-        num_keys]. First it unsqueezes to [batch_size, 1, num_queries,
-        num_keys] and then expands to [batch_size, num_heads, num_queries,
-        num_keys] to match the expected shape of attention scores.
+        A 3D mask of shape [batch_size, num_queries, num_keys] gains a
+        singleton head dimension so it broadcasts across heads.
 
-        If given mask dimension == 4, and mask's second dimension == 1 but
-        num_heads != 1, assumes mask is provided as [batch_size, 1, num_queries,
-        num_keys] and expands it to [batch_size, num_heads, num_queries,
-        num_keys].
+        A 4D mask is kept unchanged, whether it has a singleton head dimension
+        or a separate mask for each head.
 
         Args:
             attn_mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
-                a 4D shape of [batch_size, num_heads, num_queries, num_keys].
+                a 4D shape of [batch_size, 1 or num_heads, num_queries,
+                num_keys].
                 Only torch.bool masks are supported. True marks positions that
                 should be masked out, and False marks positions that can be
                 attended to.
-            batch_size (int): Batch size to expand the 2D masks to.
-            num_heads (int): Number of attention heads to expand the 2D / 3D /
-                4D masks to.
 
         Returns:
-            attn_mask (Tensor): Attention mask of shape [batch_size,
-                num_heads, num_queries, num_keys].
-
+            attn_mask (Tensor): Attention mask with a shape broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
         """
-        if attn_mask.dim() == 2:
-            attn_mask = attn_mask.unsqueeze(0).unsqueeze(0)
-            attn_mask = attn_mask.expand(batch_size, num_heads, -1, -1)
-        elif attn_mask.dim() == 3:
+        if attn_mask.dim() == 3:
             attn_mask = attn_mask.unsqueeze(1)
-            attn_mask = attn_mask.expand(-1, num_heads, -1, -1)
-        elif attn_mask.dim() == 4:
-            if attn_mask.shape[1] == 1 and num_heads != 1:
-                attn_mask = attn_mask.expand(-1, num_heads, -1, -1)
-            else:
-                pass
-        else:
+        elif attn_mask.dim() not in (2, 4):
             raise ValueError(
                 "Attention mask must be 2D, 3D or 4D; "
                 f"got {attn_mask.dim()}D."
