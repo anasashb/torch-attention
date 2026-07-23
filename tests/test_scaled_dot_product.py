@@ -160,6 +160,71 @@ def test_scaled_dot_product_supports_mask_broadcasting(
     torch.testing.assert_close(out, expected_out)
 
 
+def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks cross-attention with different query and key lengths."""
+    batch_size = 2
+    num_heads = 4
+    num_queries = 3
+    num_keys = 5
+    query, key, value = make_qkv(
+        batch_size=batch_size,
+        num_heads=num_heads,
+        num_queries=num_queries,
+        num_keys=num_keys,
+    )
+    attn_mask = torch.zeros(num_queries, num_keys, dtype=torch.bool)
+    attn_mask[:, -1] = True
+
+    einsum_attention = ScaledDotProductAttention(
+        is_causal=False,
+        dropout_rate=0.0,
+        backend="einsum",
+        output_attention_scores=True,
+        strict_mode=True,
+        custom_scale_factor=None,
+    )
+    sdpa_attention = ScaledDotProductAttention(
+        is_causal=False,
+        dropout_rate=0.0,
+        backend="sdpa",
+        output_attention_scores=False,
+        strict_mode=True,
+        custom_scale_factor=None,
+    )
+
+    expected_out, expected_weights = einsum_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+    out, weights = sdpa_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+
+    assert expected_out.shape == (
+        batch_size,
+        num_heads,
+        num_queries,
+        query.shape[-1],
+    )
+    assert expected_weights is not None
+    assert expected_weights.shape == (
+        batch_size,
+        num_heads,
+        num_queries,
+        num_keys,
+    )
+    assert torch.count_nonzero(expected_weights[..., -1]) == 0
+    assert weights is None
+    torch.testing.assert_close(out, expected_out)
+
+
 def test_scaled_dot_product_combines_causal_and_explicit_masks(
     make_qkv: MakeQKV,
 ) -> None:
