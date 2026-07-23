@@ -172,7 +172,7 @@ class AttentionBase(nn.Module, ABC):
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
         Bk, Hk, Lk, Dhk = key.shape
-        Bv, Hv, _, Dhv = value.shape
+        Bv, Hv, Lv, Dhv = value.shape
 
         if not (Bq == Bk == Bv):
             raise ValueError(
@@ -187,6 +187,12 @@ class AttentionBase(nn.Module, ABC):
             raise ValueError(
                 "Attention heads dimension mismatch between Queries, Keys, "
                 "Values, tensors."
+            )
+        if Lk != Lv:
+            raise ValueError(
+                "Key and value sequence lengths must match; "
+                f"got key length {Lk} and value length {Lv}. "
+                "Provide one value position for each key position."
             )
 
         if attn_mask is not None and attn_mask.shape not in [
