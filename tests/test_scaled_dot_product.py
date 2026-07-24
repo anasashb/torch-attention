@@ -295,6 +295,59 @@ def test_scaled_dot_product_rejects_non_four_dimensional_qkv_tensors(
     )
 
 
+@pytest.mark.parametrize(
+    ("key_shape", "expected_message"),
+    [
+        pytest.param(
+            (1, 4, 5, 6),
+            "Query, key, and value batch sizes must match; got query batch "
+            "size 2, key batch size 1, and value batch size 2. Use the same "
+            "batch size for all three tensors.",
+            id="batch-size",
+        ),
+        pytest.param(
+            (2, 3, 5, 6),
+            "Query, key, and value head counts must match; got query head "
+            "count 4, key head count 3, and value head count 4. Use the same "
+            "number of heads for all three tensors.",
+            id="head-count",
+        ),
+        pytest.param(
+            (2, 4, 5, 5),
+            "Query, key, and value head dimensions must match; got query head "
+            "dimension 6, key head dimension 5, and value head dimension 6. "
+            "Use the same head dimension for all three tensors.",
+            id="head-dimension",
+        ),
+    ],
+)
+def test_scaled_dot_product_rejects_qkv_shape_mismatches(
+    key_shape: tuple[int, int, int, int],
+    expected_message: str,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks batch size, head count, and head dimension mismatches."""
+    query, _, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+        head_dim=6,
+    )
+    key = torch.randn(key_shape)
+    attention = ScaledDotProductAttention(strict_mode=True)
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == expected_message
+
+
 def test_scaled_dot_product_combines_causal_and_explicit_masks(
     make_qkv: MakeQKV,
 ) -> None:
