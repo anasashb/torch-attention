@@ -478,3 +478,34 @@ def test_scaled_dot_product_rejects_invalid_masks_without_strict_mode(
             value=value,
             attn_mask=attn_mask,
         )
+
+
+@pytest.mark.parametrize(
+    "attn_mask_shape",
+    [
+        pytest.param((4, 5), id="2d-query-length"),
+        pytest.param((3, 3, 5), id="3d-batch-size"),
+        pytest.param((2, 3, 3, 5), id="4d-head-count"),
+    ],
+)
+def test_scaled_dot_product_rejects_invalid_mask_shapes_in_strict_mode(
+    attn_mask_shape: tuple[int, ...],
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks exact mask dimensions when strict validation is enabled."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+    )
+    attn_mask = torch.zeros(attn_mask_shape, dtype=torch.bool)
+    attention = ScaledDotProductAttention(strict_mode=True)
+
+    with pytest.raises(ValueError, match="Invalid mask shape"):
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+        )
