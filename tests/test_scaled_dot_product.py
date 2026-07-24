@@ -177,6 +177,54 @@ def test_scaled_dot_product_supports_cpu_bfloat16_autocast(
         assert weights is None
 
 
+@pytest.mark.parametrize("backend", ["einsum", "sdpa"])
+def test_scaled_dot_product_supports_torch_compile_fullgraph_capture(
+    backend: AttentionBackend,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks full-graph torch.compile capture for every backend."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+    )
+    attn_mask = torch.zeros(3, 5, dtype=torch.bool)
+    attn_mask[:, -1] = True
+    output_attention_scores = backend == "einsum"
+    attention = ScaledDotProductAttention(
+        backend=backend,
+        output_attention_scores=output_attention_scores,
+    )
+    compiled_attention = torch.compile(
+        model=attention,
+        backend="eager",
+        fullgraph=True,
+    )
+
+    expected_output, expected_weights = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+    output, weights = compiled_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+
+    torch.testing.assert_close(output, expected_output)
+    if output_attention_scores:
+        assert weights is not None
+        assert expected_weights is not None
+        torch.testing.assert_close(weights, expected_weights)
+    else:
+        assert weights is None
+        assert expected_weights is None
+
+
 @pytest.mark.parametrize(
     "attn_mask_shape",
     [
