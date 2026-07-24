@@ -188,17 +188,24 @@ class AttentionBase(nn.Module, ABC):
 
         if not (Bq == Bk == Bv):
             raise ValueError(
-                "Batch size mismatch between Queries, Keys, Values tensors."
+                "Query, key, and value batch sizes must match; "
+                f"got query batch size {Bq}, key batch size {Bk}, and "
+                f"value batch size {Bv}. Use the same batch size for all "
+                "three tensors."
             )
         if not (Hq == Hk == Hv):
             raise ValueError(
-                "Attention heads count mismatch between Queries, Keys, Values "
-                "tensors."
+                "Query, key, and value head counts must match; "
+                f"got query head count {Hq}, key head count {Hk}, and "
+                f"value head count {Hv}. Use the same number of heads for "
+                "all three tensors."
             )
         if not (Dhq == Dhk == Dhv):
             raise ValueError(
-                "Attention heads dimension mismatch between Queries, Keys, "
-                "Values, tensors."
+                "Query, key, and value head dimensions must match; "
+                f"got query head dimension {Dhq}, key head dimension {Dhk}, "
+                f"and value head dimension {Dhv}. Use the same head dimension "
+                "for all three tensors."
             )
         if Lk != Lv:
             raise ValueError(
