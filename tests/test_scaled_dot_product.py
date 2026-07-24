@@ -433,3 +433,48 @@ def test_scaled_dot_product_requires_boolean_mask(
             value=value,
             attn_mask=attn_mask,
         )
+
+
+@pytest.mark.parametrize(
+    (
+        "attn_mask_shape",
+        "attn_mask_dtype",
+        "expected_error",
+        "expected_message",
+    ),
+    [
+        pytest.param(
+            (8, 8),
+            torch.float32,
+            TypeError,
+            "Only boolean attention masks are supported",
+            id="dtype",
+        ),
+        pytest.param(
+            (8,),
+            torch.bool,
+            ValueError,
+            "Attention mask must be 2D, 3D or 4D",
+            id="rank",
+        ),
+    ],
+)
+def test_scaled_dot_product_rejects_invalid_masks_without_strict_mode(
+    attn_mask_shape: tuple[int, ...],
+    attn_mask_dtype: torch.dtype,
+    expected_error: type[Exception],
+    expected_message: str,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that mask dtype and rank validation cannot be disabled."""
+    query, key, value = make_qkv()
+    attn_mask = torch.zeros(attn_mask_shape, dtype=attn_mask_dtype)
+    attention = ScaledDotProductAttention(strict_mode=False)
+
+    with pytest.raises(expected_error, match=expected_message):
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+        )
