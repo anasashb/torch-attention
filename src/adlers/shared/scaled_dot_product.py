@@ -146,13 +146,18 @@ class ScaledDotProductAttention(AttentionBase):
             key=key,
             attn_mask=attn_mask,
         )
+        fully_masked_rows = None
         if combined_mask is not None:
+            fully_masked_rows = combined_mask.all(dim=-1, keepdim=True)
             scores = scores.masked_fill(combined_mask, float("-inf"))
+            scores = scores.masked_fill(fully_masked_rows, 0.0)
 
         # Get attention scores
         attn_weights = self.dropout(
             torch.softmax(scale_factor * scores, dim=-1)
         )
+        if fully_masked_rows is not None:
+            attn_weights = attn_weights.masked_fill(fully_masked_rows, 0.0)
 
         # Get attention outputs
         attn_outputs = torch.einsum("bhls,bhsd->bhld", attn_weights, value)
