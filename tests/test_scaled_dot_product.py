@@ -225,6 +225,56 @@ def test_scaled_dot_product_supports_torch_compile_fullgraph_capture(
         assert expected_weights is None
 
 
+@pytest.mark.filterwarnings(
+    "ignore:`torch[.]jit[.]script_method` is deprecated[.] "
+    "Please switch to `torch[.]compile` or `torch[.]export`[.]:"
+    "DeprecationWarning:torch[.]jit[.]_script"
+)
+@pytest.mark.parametrize("backend", ["einsum", "sdpa"])
+def test_scaled_dot_product_supports_strict_torch_export(
+    backend: AttentionBackend,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks strict torch.export capture and replay for every backend."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+    )
+    attn_mask = torch.zeros(3, 5, dtype=torch.bool)
+    attn_mask[:, -1] = True
+    inputs = {
+        "query": query,
+        "key": key,
+        "value": value,
+        "attn_mask": attn_mask,
+    }
+    output_attention_scores = backend == "einsum"
+    attention = ScaledDotProductAttention(
+        backend=backend,
+        output_attention_scores=output_attention_scores,
+    )
+    exported_program = torch.export.export(
+        mod=attention,
+        args=(),
+        kwargs=inputs,
+        strict=True,
+    )
+
+    expected_output, expected_weights = attention(**inputs)
+    output, weights = exported_program.module()(**inputs)
+
+    torch.testing.assert_close(output, expected_output)
+    if output_attention_scores:
+        assert weights is not None
+        assert expected_weights is not None
+        torch.testing.assert_close(weights, expected_weights)
+    else:
+        assert weights is None
+        assert expected_weights is None
+
+
 @pytest.mark.parametrize(
     "attn_mask_shape",
     [
