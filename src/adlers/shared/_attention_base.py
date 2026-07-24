@@ -77,13 +77,6 @@ class AttentionBase(nn.Module, ABC):
             self._validate_attn_mask_dtype(attn_mask=attn_mask)
             attn_mask = self._normalize_attn_mask(attn_mask=attn_mask)
 
-        # Generate scale factor if not provided
-        if self.custom_scale_factor is not None:
-            scale_factor = self.custom_scale_factor
-        else:
-            _, _, _, head_dim = key.shape
-            scale_factor = 1.0 / sqrt(head_dim)
-
         # Validate input shapes if using strict mode
         if self.strict_mode:
             self._validate_shapes(
@@ -92,6 +85,13 @@ class AttentionBase(nn.Module, ABC):
                 value=value,
                 attn_mask=attn_mask,
             )
+
+        # Generate scale factor if not provided
+        if self.custom_scale_factor is not None:
+            scale_factor = self.custom_scale_factor
+        else:
+            _, _, _, head_dim = key.shape
+            scale_factor = 1.0 / sqrt(head_dim)
 
         # Core computations
         attn_output, attn_weights = self._attend(
@@ -169,6 +169,18 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             None.
         """
+        for tensor_name, tensor in (
+            ("Query", query),
+            ("Key", key),
+            ("Value", value),
+        ):
+            if tensor.ndim != 4:
+                raise ValueError(
+                    f"{tensor_name} tensor must be 4D "
+                    "[batch_size, num_heads, sequence_length, head_dim]; "
+                    f"got shape {tuple(tensor.shape)}."
+                )
+
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
         Bk, Hk, Lk, Dhk = key.shape
