@@ -146,6 +146,37 @@ def test_scaled_dot_product_disables_dropout_during_evaluation(
         assert expected_weights is None
 
 
+@pytest.mark.parametrize("backend", ["einsum", "sdpa"])
+def test_scaled_dot_product_supports_cpu_bfloat16_autocast(
+    backend: AttentionBackend,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks CPU bfloat16 autocast compatibility for every backend."""
+    query, key, value = make_qkv()
+    output_attention_scores = backend == "einsum"
+    attention = ScaledDotProductAttention(
+        backend=backend,
+        output_attention_scores=output_attention_scores,
+    )
+
+    with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+        output, weights = attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert output.dtype == torch.bfloat16
+    assert torch.isfinite(output).all()
+    if output_attention_scores:
+        assert weights is not None
+        assert weights.dtype == torch.bfloat16
+        assert torch.isfinite(weights).all()
+    else:
+        assert weights is None
+
+
 @pytest.mark.parametrize(
     "attn_mask_shape",
     [
