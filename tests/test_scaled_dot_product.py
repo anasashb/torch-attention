@@ -394,6 +394,59 @@ def test_scaled_dot_product_combines_causal_and_explicit_masks(
     torch.testing.assert_close(out, expected_out)
 
 
+def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that fully masked query rows produce zeros across backends."""
+    batch_size = 2
+    num_heads = 4
+    num_queries = 3
+    num_keys = 5
+    fully_masked_query_index = 1
+    query, key, value = make_qkv(
+        batch_size=batch_size,
+        num_heads=num_heads,
+        num_queries=num_queries,
+        num_keys=num_keys,
+    )
+    attn_mask = torch.zeros(num_queries, num_keys, dtype=torch.bool)
+    attn_mask[fully_masked_query_index, :] = True
+    einsum_attention = ScaledDotProductAttention(
+        backend="einsum",
+        output_attention_scores=True,
+    )
+    sdpa_attention = ScaledDotProductAttention(backend="sdpa")
+
+    einsum_output, einsum_weights = einsum_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+    sdpa_output, sdpa_weights = sdpa_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+
+    assert einsum_weights is not None
+    assert sdpa_weights is None
+    torch.testing.assert_close(
+        einsum_weights[..., fully_masked_query_index, :],
+        torch.zeros_like(einsum_weights[..., fully_masked_query_index, :]),
+    )
+    torch.testing.assert_close(
+        einsum_output[..., fully_masked_query_index, :],
+        torch.zeros_like(einsum_output[..., fully_masked_query_index, :]),
+    )
+    torch.testing.assert_close(
+        sdpa_output[..., fully_masked_query_index, :],
+        torch.zeros_like(sdpa_output[..., fully_masked_query_index, :]),
+    )
+    torch.testing.assert_close(einsum_output, sdpa_output)
+
+
 def test_sdpa_backend_rejects_attention_scores() -> None:
     """Checks that SDPA rejects unsupported attention score output."""
     with pytest.raises(ValueError, match="does not support"):
