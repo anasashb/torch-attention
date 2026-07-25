@@ -10,6 +10,10 @@ class ScaledDotProductAttention(AttentionBase):
     """
     Scaled dot-product attention with selectable computation backends.
 
+    Query, key, and value tensors must have shape [batch_size, num_heads,
+    sequence_length, head_dim]. Query and key lengths may differ, but key and
+    value lengths must match.
+
     The "einsum" backend computes attention explicitly with PyTorch tensor
     operations and can return attention weights. The "sdpa" backend delegates
     to torch.nn.functional.scaled_dot_product_attention, which can use
@@ -18,6 +22,8 @@ class ScaledDotProductAttention(AttentionBase):
 
     Attention masks must be torch.bool tensors. True marks positions that
     should be masked out, and False marks positions that can be attended to.
+    Fully masked query rows produce zero outputs. The "einsum" backend also
+    returns zero attention weights for those rows.
 
     Args:
         is_causal (bool): Whether to prevent queries from attending to future
@@ -33,6 +39,9 @@ class ScaledDotProductAttention(AttentionBase):
             weights. The "sdpa" backend delegates to PyTorch's native
             scaled dot-product attention implementation and cannot return
             attention weights.
+
+    Attributes:
+        backend (AttentionBackend): Attention implementation used by forward().
     """
 
     def __init__(
@@ -84,8 +93,8 @@ class ScaledDotProductAttention(AttentionBase):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            attn_mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -129,8 +138,8 @@ class ScaledDotProductAttention(AttentionBase):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            attn_mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -187,8 +196,8 @@ class ScaledDotProductAttention(AttentionBase):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            attn_mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
