@@ -10,6 +10,10 @@ class ScaledDotProductAttention(AttentionBase):
     """
     Scaled dot-product attention with selectable computation backends.
 
+    Query, key, and value tensors must have shape [batch_size, num_heads,
+    sequence_length, head_dim]. Query and key lengths may differ, but key and
+    value lengths must match.
+
     The "einsum" backend computes attention explicitly with PyTorch tensor
     operations and can return attention weights. The "sdpa" backend delegates
     to torch.nn.functional.scaled_dot_product_attention, which can use
@@ -18,10 +22,12 @@ class ScaledDotProductAttention(AttentionBase):
 
     Attention masks must be torch.bool tensors. True marks positions that
     should be masked out, and False marks positions that can be attended to.
+    Fully masked query rows produce zero outputs. The "einsum" backend also
+    returns zero attention weights for those rows.
 
     Args:
-        use_mask (bool): Whether forward() should expect and (even if not
-            provided) apply an attention mask.
+        is_causal (bool): Whether to prevent queries from attending to future
+            key positions.
         dropout_rate (float): Dropout rate.
         output_attention_scores (bool): Whether forward() should return
             attention weights.
@@ -33,11 +39,14 @@ class ScaledDotProductAttention(AttentionBase):
             weights. The "sdpa" backend delegates to PyTorch's native
             scaled dot-product attention implementation and cannot return
             attention weights.
+
+    Attributes:
+        backend (AttentionBackend): Attention implementation used by forward().
     """
 
     def __init__(
         self,
-        use_mask: bool = False,
+        is_causal: bool = False,
         dropout_rate: float = 0.0,
         output_attention_scores: bool = False,
         strict_mode: bool = True,
@@ -57,7 +66,7 @@ class ScaledDotProductAttention(AttentionBase):
             )
 
         super().__init__(
-            use_mask=use_mask,
+            is_causal=is_causal,
             dropout_rate=dropout_rate,
             output_attention_scores=output_attention_scores,
             strict_mode=strict_mode,
@@ -71,7 +80,7 @@ class ScaledDotProductAttention(AttentionBase):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> tuple[Tensor, Tensor | None]:
         """
         Routes scaled dot-product attention to the configured backend.
@@ -84,8 +93,8 @@ class ScaledDotProductAttention(AttentionBase):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -99,7 +108,7 @@ class ScaledDotProductAttention(AttentionBase):
                 key=key,
                 value=value,
                 scale_factor=scale_factor,
-                mask=mask,
+                attn_mask=attn_mask,
             )
 
         return self._attend_sdpa(
@@ -107,7 +116,7 @@ class ScaledDotProductAttention(AttentionBase):
             key=key,
             value=value,
             scale_factor=scale_factor,
-            mask=mask,
+            attn_mask=attn_mask,
         )
 
     def _attend_einsum(
@@ -116,7 +125,7 @@ class ScaledDotProductAttention(AttentionBase):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> tuple[Tensor, Tensor]:
         """
         Computes attention with explicit einsum operations.
@@ -129,8 +138,8 @@ class ScaledDotProductAttention(AttentionBase):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -138,28 +147,26 @@ class ScaledDotProductAttention(AttentionBase):
             attn_weights (Tensor): Attention weights tensor of shape
                 [batch_size, num_heads, num_queries, num_keys].
         """
-        # Short-hand notation for shapes
-        Bq, Hq, Lq, _ = query.shape
-        _, _, Lk, _ = key.shape
-
         # Get raw scores
         scores = torch.einsum("bhle,bhse->bhls", query, key)
 
-        # Apply mask if needed
-        if self.use_mask:
-            if mask is None:
-                mask = torch.triu(
-                    torch.ones(Lq, Lk, dtype=torch.bool, device=query.device),
-                    diagonal=1,
-                )
-                mask = mask.unsqueeze(0).unsqueeze(0).expand(Bq, Hq, Lq, Lk)
-
-            scores.masked_fill_(mask, float("-inf"))
+        combined_mask = self._combine_with_causal_mask(
+            query=query,
+            key=key,
+            attn_mask=attn_mask,
+        )
+        fully_masked_rows = None
+        if combined_mask is not None:
+            fully_masked_rows = combined_mask.all(dim=-1, keepdim=True)
+            scores = scores.masked_fill(combined_mask, float("-inf"))
+            scores = scores.masked_fill(fully_masked_rows, 0.0)
 
         # Get attention scores
         attn_weights = self.dropout(
             torch.softmax(scale_factor * scores, dim=-1)
         )
+        if fully_masked_rows is not None:
+            attn_weights = attn_weights.masked_fill(fully_masked_rows, 0.0)
 
         # Get attention outputs
         attn_outputs = torch.einsum("bhls,bhsd->bhld", attn_weights, value)
@@ -172,7 +179,7 @@ class ScaledDotProductAttention(AttentionBase):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> tuple[Tensor, None]:
         """
         Computes attention with PyTorch's native SDPA implementation.
@@ -189,19 +196,29 @@ class ScaledDotProductAttention(AttentionBase):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            mask (Tensor): Attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys].
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
             None: SDPA does not return attention weights.
         """
-        attn_mask = None
-        is_causal = self.use_mask
+        is_causal = self.is_causal
 
-        if self.use_mask and mask is not None:
-            attn_mask = ~mask if mask.dtype == torch.bool else mask
+        # torch does not allow using both causal and a custom mask
+        # https://docs.pytorch.org/docs/main/generated/torch.nn.functional.scaled_dot_product_attention.html
+        # here, if user wants both, we generate the combination ourself and
+        # feed it to F.scaled_dot_product_attention as an explicit custom mask
+        # and is_causal=False
+        if attn_mask is not None:
+            if self.is_causal:
+                causal_mask = self._make_causal_mask(
+                    query=query,
+                    key=key,
+                )
+                attn_mask = attn_mask | causal_mask
+            attn_mask = ~attn_mask
             is_causal = False
 
         dropout_p = (

@@ -10,8 +10,8 @@ class AttentionBase(nn.Module, ABC):
     Base class for all attention modules in this package.
 
     Args:
-        use_mask (bool): Whether forward() should expect and (even if not
-            provided) apply an attention mask.
+        is_causal (bool): Whether to prevent queries from attending to future
+            key positions.
         dropout_rate (float): Dropout rate.
         output_attention_scores (bool): Whether forward() should return
             attention weights.
@@ -24,14 +24,14 @@ class AttentionBase(nn.Module, ABC):
 
     def __init__(
         self,
-        use_mask: bool = False,
+        is_causal: bool = False,
         dropout_rate: float = 0.0,
         output_attention_scores: bool = False,
         strict_mode: bool = True,
         custom_scale_factor: float | None = None,
     ) -> None:
         super().__init__()
-        self.use_mask = use_mask
+        self.is_causal = is_causal
         self.dropout = (
             nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity()
         )
@@ -44,7 +44,7 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mask: Tensor | None = None,
+        attn_mask: Tensor | None = None,
     ) -> tuple[Tensor, Tensor | None]:
         """
         Forward method inherited by all child classes of AttentionBase.
@@ -59,24 +59,37 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Boolean attention mask tensor of either:
+            attn_mask (Optional[Tensor]): Boolean attention mask tensor of
+                either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
-                a 4D shape of [batch_size, num_heads, num_queries, num_keys].
-                Only torch.bool masks are supported. True marks positions that
-                should be masked out, and False marks positions that can be
-                attended to.
+                a 4D shape of [batch_size, 1 or num_heads, num_queries,
+                num_keys]. Only torch.bool masks are supported. True marks
+                positions that should be masked out, and False marks positions
+                that can be attended to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
             attn_weights (Optional[Tensor]): Attention weights tensor of shape
                 [batch_size, num_heads, num_queries, num_keys].
+
+        Raises:
+            TypeError: If attn_mask is not a torch.bool tensor.
+            ValueError: If the mask rank is unsupported, or if strict mode is
+                enabled and an input shape is invalid.
         """
-        # Adjust mask shape if mask should be used and is provided
-        if self.use_mask and mask is not None:
-            mask = self._normalize_mask(
-                mask=mask, batch_size=query.shape[0], num_heads=query.shape[1]
+        if attn_mask is not None:
+            self._validate_attn_mask_dtype(attn_mask=attn_mask)
+            attn_mask = self._normalize_attn_mask(attn_mask=attn_mask)
+
+        # Validate input shapes if using strict mode
+        if self.strict_mode:
+            self._validate_shapes(
+                query=query,
+                key=key,
+                value=value,
+                attn_mask=attn_mask,
             )
 
         # Generate scale factor if not provided
@@ -86,17 +99,13 @@ class AttentionBase(nn.Module, ABC):
             _, _, _, head_dim = key.shape
             scale_factor = 1.0 / sqrt(head_dim)
 
-        # Validate input shapes if using strict mode
-        if self.strict_mode:
-            self._validate_shapes(query=query, key=key, value=value, mask=mask)
-
         # Core computations
         attn_output, attn_weights = self._attend(
             query=query,
             key=key,
             value=value,
             scale_factor=scale_factor,
-            mask=mask,
+            attn_mask=attn_mask,
         )
 
         return (
@@ -112,10 +121,10 @@ class AttentionBase(nn.Module, ABC):
         key: Tensor,
         value: Tensor,
         scale_factor: float,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> tuple[Tensor, Tensor | None]:
         """
-        Core attention method that will be overriden in subclasses.
+        Core attention method that will be overridden in subclasses.
 
         Args:
             query (Tensor): Query tensor of shape [batch_size, num_heads,
@@ -125,10 +134,10 @@ class AttentionBase(nn.Module, ABC):
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
             scale_factor (float): Scale factor to multiply raw scores by.
-            mask (Tensor): Boolean attention mask tensor of shape [batch_size,
-                num_heads, num_queries, num_keys]. True marks positions that
-                should be masked out, and False marks positions that can be
-                attended to.
+            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
+                [batch_size, num_heads, num_queries, num_keys]. True marks
+                positions that should be masked out, and False marks positions
+                that can be attended to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -143,7 +152,7 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        mask: Tensor | None,
+        attn_mask: Tensor | None,
     ) -> None:
         """
         Validates shapes of the Query, Key, Value and optional attention mask
@@ -156,108 +165,150 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            mask (Tensor): Boolean attention mask tensor of either:
+            attn_mask (Optional[Tensor]): Boolean attention mask tensor of
+                either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
-                a 4D shape of [batch_size, num_heads, num_queries, num_keys].
-                Only torch.bool masks are supported. True marks positions that
-                should be masked out, and False marks positions that can be
-                attended to.
+                a 4D shape of [batch_size, 1 or num_heads, num_queries,
+                num_keys]. Only torch.bool masks are supported. True marks
+                positions that should be masked out, and False marks positions
+                that can be attended to.
         Returns:
             None.
         """
+        for tensor_name, tensor in (
+            ("Query", query),
+            ("Key", key),
+            ("Value", value),
+        ):
+            if tensor.ndim != 4:
+                raise ValueError(
+                    f"{tensor_name} tensor must be 4D "
+                    "[batch_size, num_heads, sequence_length, head_dim]; "
+                    f"got shape {tuple(tensor.shape)}."
+                )
+
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
         Bk, Hk, Lk, Dhk = key.shape
-        Bv, Hv, _, Dhv = value.shape
+        Bv, Hv, Lv, Dhv = value.shape
 
         if not (Bq == Bk == Bv):
             raise ValueError(
-                "Batch size mismatch between Queries, Keys, Values tensors."
+                "Query, key, and value batch sizes must match; "
+                f"got query batch size {Bq}, key batch size {Bk}, and "
+                f"value batch size {Bv}. Use the same batch size for all "
+                "three tensors."
             )
         if not (Hq == Hk == Hv):
             raise ValueError(
-                "Attention heads count mismatch between Queries, Keys, Values "
-                "tensors."
+                "Query, key, and value head counts must match; "
+                f"got query head count {Hq}, key head count {Hk}, and "
+                f"value head count {Hv}. Use the same number of heads for "
+                "all three tensors."
             )
         if not (Dhq == Dhk == Dhv):
             raise ValueError(
-                "Attention heads dimension mismatch between Queries, Keys, "
-                "Values, tensors."
+                "Query, key, and value head dimensions must match; "
+                f"got query head dimension {Dhq}, key head dimension {Dhk}, "
+                f"and value head dimension {Dhv}. Use the same head dimension "
+                "for all three tensors."
+            )
+        if Lk != Lv:
+            raise ValueError(
+                "Key and value sequence lengths must match; "
+                f"got key length {Lk} and value length {Lv}. "
+                "Provide one value position for each key position."
             )
 
-        if mask is not None and mask.shape not in [
+        if attn_mask is not None and attn_mask.shape not in [
             (Lq, Lk),
-            (Bq, Lq, Lk),
+            (Bq, 1, Lq, Lk),
             (Bq, Hq, Lq, Lk),
         ]:
             raise ValueError(
-                f"Invalid mask shape {mask.shape}, expected (num_queries, "
-                "num_keys), (batch_size, num_queries, num_keys), or "
-                "(batch_size, num_heads, num_queries, num_keys)."
-            )
-        if mask is not None and mask.dtype != torch.bool:
-            raise TypeError(
-                "Only boolean attention masks are supported; "
-                f"got mask dtype {mask.dtype}. Use a torch.bool mask with "
-                "True for positions that should be masked out and False for "
-                "positions that can be attended to."
+                f"Invalid mask shape {attn_mask.shape}, expected "
+                "(num_queries, num_keys), (batch_size, 1, num_queries, "
+                "num_keys), or (batch_size, num_heads, num_queries, "
+                "num_keys)."
             )
 
     @staticmethod
-    def _normalize_mask(
-        mask: Tensor,
-        batch_size: int,
-        num_heads: int,
-    ) -> Tensor:
+    def _validate_attn_mask_dtype(attn_mask: Tensor) -> None:
+        """Validates that an attention mask follows ADLERS semantics."""
+        # NOTE: for now only allowing boolean masks, may extend support to
+        # float masks once/if repo is (ever) more mature
+        if attn_mask.dtype != torch.bool:
+            raise TypeError(
+                "Only boolean attention masks are supported; "
+                f"got mask dtype {attn_mask.dtype}. Use a torch.bool mask "
+                "with True for positions that should be masked out and "
+                "False for positions that can be attended to."
+            )
+
+    @staticmethod
+    def _normalize_attn_mask(attn_mask: Tensor) -> Tensor:
         """
-        Adjusts mask shape from either 2D to 4D or 3D to 4D. Expands to
-        num_heads dimension on a 4D mask if needed.
+        Preserves broadcastable mask shapes for attention operations.
 
-        If given mask dimension == 2, assumes it is [num_queries, num_keys].
-        First it unsqueezes to [1, 1, num_queries, num_keys] and then expands
-        to [batch_size, num_heads, num_queries, num_keys] to match the expected
-        shape of attention scores.
+        A 2D mask of shape [num_queries, num_keys] is kept unchanged and
+        broadcasts across batches and heads.
 
-        If given mask dimension == 3, assumes it is [batch_size, num_queries,
-        num_keys]. First it unsqueezes to [batch_size, 1, num_queries,
-        num_keys] and then expands to [batch_size, num_heads, num_queries,
-        num_keys] to match the expected shape of attention scores.
+        A 3D mask of shape [batch_size, num_queries, num_keys] gains a
+        singleton head dimension so it broadcasts across heads.
 
-        If given mask dimension == 4, and mask's second dimension == 1 but
-        num_heads != 1, assumes mask is provided as [batch_size, 1, num_queries,
-        num_keys] and expands it to [batch_size, num_heads, num_queries,
-        num_keys].
+        A 4D mask is kept unchanged, whether it has a singleton head dimension
+        or a separate mask for each head.
 
         Args:
-            mask (Tensor): Boolean attention mask tensor of either:
+            attn_mask (Tensor): Boolean attention mask tensor of either:
                 a 2D shape of [num_queries, num_keys],
                 a 3D shape of [batch_size, num_queries, num_keys], or
-                a 4D shape of [batch_size, num_heads, num_queries, num_keys].
+                a 4D shape of [batch_size, 1 or num_heads, num_queries,
+                num_keys].
                 Only torch.bool masks are supported. True marks positions that
                 should be masked out, and False marks positions that can be
                 attended to.
-            batch_size (int): Batch size to expand the 2D masks to.
-            num_heads (int): Number of attention heads to expand the 2D / 3D /
-                4D masks to.
 
         Returns:
-            mask (Tensor): Attention mask of shape [batch_size, num_heads,
-                num_queries, num_keys].
-
+            attn_mask (Tensor): Attention mask with a shape broadcastable to
+                [batch_size, num_heads, num_queries, num_keys].
         """
-        if mask.dim() == 2:
-            mask = mask.unsqueeze(0).unsqueeze(0)
-            mask = mask.expand(batch_size, num_heads, -1, -1)
-        elif mask.dim() == 3:
-            mask = mask.unsqueeze(1)
-            mask = mask.expand(-1, num_heads, -1, -1)
-        elif mask.dim() == 4:
-            if mask.shape[1] == 1 and num_heads != 1:
-                mask = mask.expand(-1, num_heads, -1, -1)
-            else:
-                pass
-        else:
-            raise ValueError(f"Mask must be 2D, 3D or 4D; got {mask.dim()}D")
+        if attn_mask.dim() == 3:
+            attn_mask = attn_mask.unsqueeze(1)
+        elif attn_mask.dim() not in (2, 4):
+            raise ValueError(
+                "Attention mask must be 2D, 3D or 4D; "
+                f"got {attn_mask.dim()}D."
+            )
 
-        return mask
+        return attn_mask
+
+    def _combine_with_causal_mask(
+        self,
+        query: Tensor,
+        key: Tensor,
+        attn_mask: Tensor | None,
+    ) -> Tensor | None:
+        """Combines an explicit attention mask with causal restrictions."""
+        if not self.is_causal:
+            return attn_mask
+
+        causal_mask = self._make_causal_mask(query=query, key=key)
+        if attn_mask is None:
+            return causal_mask
+
+        return causal_mask | attn_mask
+
+    @staticmethod
+    def _make_causal_mask(query: Tensor, key: Tensor) -> Tensor:
+        """Creates a causal mask for the query and key sequence lengths."""
+        return torch.triu(
+            torch.ones(
+                query.shape[-2],
+                key.shape[-2],
+                dtype=torch.bool,
+                device=query.device,
+            ),
+            diagonal=1,
+        )

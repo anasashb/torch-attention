@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-07-25
+
+### Added
+
+- Enhanced cross-attention support by allowing query length to differ from the
+  key and value lengths.
+- Added support for 4D attention masks that broadcast across heads.
+
+### Changed
+
+- Replaced `use_mask` with `is_causal`, separating causal masking from
+  supplied attention masks.
+- Renamed the forward mask argument to `attn_mask`.
+- Applied supplied attention masks independently of causal masking and combined
+  both restrictions when they are used together.
+- Kept supported masks in broadcastable shapes instead of expanding them
+  across every batch and head.
+- Tightened shape validation for query, key, value, and attention masks.
+
+### Fixed
+
+- Returned zeros for fully masked query rows in the `einsum` backend instead
+  of NaNs.
+- Added validation for mismatched or incorrectly shaped query, key, and value
+  tensors instead of relying on PyTorch to reject them.
+
 ## [0.3.0] - 2026-07-15
 
 ### Changed
