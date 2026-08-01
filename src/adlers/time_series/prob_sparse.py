@@ -11,18 +11,19 @@ from math import sqrt
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 
 class ProbMask:
     def __init__(
         self,
-        batch_size,
-        num_heads,
-        num_queries,
-        query_indices,
-        scores,
-        device="cpu",
-    ):
+        batch_size: int,
+        num_heads: int,
+        num_queries: int,
+        query_indices: Tensor,
+        scores: Tensor,
+        device: torch.device | str = "cpu",
+    ) -> None:
         _mask = (
             torch.ones(num_queries, scores.shape[-1], dtype=torch.bool)
             .to(device)
@@ -43,7 +44,7 @@ class ProbMask:
         self._mask = indicator.view(scores.shape).to(device)
 
     @property
-    def mask(self):
+    def mask(self) -> Tensor:
         return self._mask
 
 
