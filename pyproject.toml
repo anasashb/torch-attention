@@ -4,7 +4,12 @@ version = "0.4.0"
 description = "A unified package for PyTorch-based attention mechanisms from across domains"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT AND Apache-2.0"
+license-files = [
+    "LICENSE",
+    "LICENSES/Apache-2.0.txt",
+    "NOTICE",
+]
 authors = [
     { name = "Bachana Anasashvili", email = "ba.anasashvili@gmail.com" },
 ]
