@@ -14,15 +14,30 @@ import torch.nn as nn
 
 
 class ProbMask:
-    def __init__(self, B, H, L, index, scores, device="cpu"):
+    def __init__(
+        self,
+        batch_size,
+        num_heads,
+        num_queries,
+        query_indices,
+        scores,
+        device="cpu",
+    ):
         _mask = (
-            torch.ones(L, scores.shape[-1], dtype=torch.bool).to(device).triu(1)
+            torch.ones(num_queries, scores.shape[-1], dtype=torch.bool)
+            .to(device)
+            .triu(1)
         )
-        _mask_ex = _mask[None, None, :].expand(B, H, L, scores.shape[-1])
+        _mask_ex = _mask[None, None, :].expand(
+            batch_size,
+            num_heads,
+            num_queries,
+            scores.shape[-1],
+        )
         indicator = _mask_ex[
-            torch.arange(B)[:, None, None],
-            torch.arange(H)[None, :, None],
-            index,
+            torch.arange(batch_size)[:, None, None],
+            torch.arange(num_heads)[None, :, None],
+            query_indices,
             :,
         ].to(device)
         self._mask = indicator.view(scores.shape).to(device)
