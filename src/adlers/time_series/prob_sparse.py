@@ -164,20 +164,23 @@ class ProbAttention(nn.Module):
 
         return top_query_scores, top_query_indices
 
-    def _get_initial_context(self, V, L_Q):
-        B, H, L_V, D = V.shape
+    def _make_default_context(self, value, num_queries):
+        """Creates the default context (`S0` in Algorithm 1 the Informer)."""
+        batch_size, num_heads, num_values, head_dim = value.shape
+
         if not self.mask_flag:
-            # V_sum = V.sum(dim=-2)
-            V_sum = V.mean(dim=-2)
-            contex = (
-                V_sum.unsqueeze(-2).expand(B, H, L_Q, V_sum.shape[-1]).clone()
+            mean_value = value.mean(dim=-2)
+            context = (
+                mean_value.unsqueeze(-2)
+                .expand(batch_size, num_heads, num_queries, head_dim)
+                .clone()
             )
-        else:  # use mask
-            assert (
-                L_Q == L_V
-            )  # requires that L_Q == L_V, i.e. for self-attention only
-            contex = V.cumsum(dim=-2)
-        return contex
+        else:
+            # Causal default context requires self-attention
+            assert num_queries == num_values
+            context = value.cumsum(dim=-2)
+
+        return context
 
     def _update_context(self, context_in, V, scores, index, L_Q, attn_mask):
         B, H, L_V, D = V.shape
@@ -237,8 +240,10 @@ class ProbAttention(nn.Module):
         scale = self.scale or 1.0 / sqrt(D)
         if scale is not None:
             scores_top = scores_top * scale
-        # get the context
-        context = self._get_initial_context(values, L_Q)
+        context = self._make_default_context(
+            value=values,
+            num_queries=L_Q,
+        )
         # update the context with selected top_k queries
         context, attn = self._update_context(
             context, values, scores_top, index, L_Q, attn_mask
