@@ -164,8 +164,35 @@ class ProbAttention(nn.Module):
 
         return top_query_scores, top_query_indices
 
-    def _make_default_context(self, value, num_queries):
-        """Creates the default context (`S0` in Algorithm 1 the Informer)."""
+    def _make_default_context(
+        self,
+        value: Tensor,
+        num_queries: int,
+    ) -> Tensor:
+        """
+        Creates the default context for all queries.
+
+        The default context (`S0` in Algorithm 1 of the Informer paper) gives
+        queries a cheap initial output before attention is calculated for the
+        selected queries. Unselected queries keep this output.
+
+        For non-causal attention, each query starts with the mean value vector.
+        For causal attention, each query starts with the cumulative sum of the
+        values available up to its position.
+
+        Args:
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_values, head_dim].
+            num_queries (int): Number of query positions.
+
+        Returns:
+            Tensor: Default context of shape [batch_size, num_heads,
+                num_queries, head_dim].
+
+        Raises:
+            ValueError: If causal attention is used with different query and
+                value sequence lengths.
+        """
         batch_size, num_heads, num_values, head_dim = value.shape
 
         if not self.mask_flag:
@@ -175,9 +202,16 @@ class ProbAttention(nn.Module):
                 .expand(batch_size, num_heads, num_queries, head_dim)
                 .clone()
             )
+
         else:
-            # Causal default context requires self-attention
-            assert num_queries == num_values
+            if num_queries != num_values:
+                raise ValueError(
+                    "Causal ProbSparse attention requires query and value "
+                    "tensors to have the same sequence length; "
+                    f"got query length {num_queries} and value length "
+                    f"{num_values}."
+                )
+
             context = value.cumsum(dim=-2)
 
         return context
