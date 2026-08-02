@@ -5,6 +5,13 @@
 # Licensed under the Apache License, Version 2.0.
 # This file has been modified for ADLERS.
 # See LICENSES/Apache-2.0.txt and NOTICE.
+#
+# Paper:
+# Informer: Beyond Efficient Transformer for Long Sequence Time-Series
+# Forecasting
+# https://arxiv.org/abs/2012.07436v3
+#
+# Equation and algorithm references below refer to this paper.
 
 from math import sqrt
 
@@ -66,11 +73,35 @@ class ProbAttention(nn.Module):
 
     def _compute_top_query_scores(
         self,
-        query,
-        key,
-        num_sampled_keys,
-        num_top_queries,
-    ):
+        query: Tensor,
+        key: Tensor,
+        num_sampled_keys: int,
+        num_top_queries: int,
+    ) -> tuple[Tensor, Tensor]:
+        """
+        Computes scores for queries selected by the ProbSparse attention
+        mechanism.
+
+        Keys are sampled for each query to calculate `sampled_query_key_scores`
+        (`S_bar` in Algorithm 1) and `query_sparsity_measurements` (`M_bar` in
+        Equation 4). The `top_queries` selected under these measurements
+        (`Q_bar` in Algorithm 1) are then scored against every key.
+
+        Args:
+            query (Tensor): Query tensor of shape [batch_size, num_heads,
+                num_queries, head_dim].
+            key (Tensor): Key tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            num_sampled_keys (int): Number of keys sampled for each query.
+            num_top_queries (int): Number of queries selected using the
+                approximate sparsity measurements.
+
+        Returns:
+            top_query_scores (Tensor): Scores of shape [batch_size, num_heads,
+                num_top_queries, num_keys].
+            top_query_indices (Tensor): Selected query indices of shape
+                [batch_size, num_heads, num_top_queries].
+        """
         batch_size, num_heads, num_keys, head_dim = key.shape
         _, _, num_queries, _ = query.shape
 
