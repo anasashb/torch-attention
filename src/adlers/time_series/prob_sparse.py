@@ -310,39 +310,49 @@ class ProbAttention(nn.Module):
             return (context, None)
 
     def forward(self, queries, keys, values, attn_mask):
-        B, L_Q, H, D = queries.shape
-        _, L_K, _, _ = keys.shape
+        batch_size, num_queries, num_heads, head_dim = queries.shape
+        _, num_keys, _, _ = keys.shape
 
         queries = queries.transpose(2, 1)
         keys = keys.transpose(2, 1)
         values = values.transpose(2, 1)
 
-        U_part = (
-            self.factor * np.ceil(np.log(L_K)).astype("int").item()
+        num_sampled_keys = (
+            self.factor * np.ceil(np.log(num_keys)).astype("int").item()
         )  # c*ln(L_k)
-        u = self.factor * np.ceil(np.log(L_Q)).astype("int").item()  # c*ln(L_q)
+        num_top_queries = (
+            self.factor * np.ceil(np.log(num_queries)).astype("int").item()
+        )  # c*ln(L_q)
 
-        U_part = U_part if U_part < L_K else L_K
-        u = u if u < L_Q else L_Q
+        num_sampled_keys = (
+            num_sampled_keys if num_sampled_keys < num_keys else num_keys
+        )
+        num_top_queries = (
+            num_top_queries if num_top_queries < num_queries else num_queries
+        )
 
-        scores_top, index = self._compute_top_query_scores(
+        top_query_scores, top_query_indices = self._compute_top_query_scores(
             query=queries,
             key=keys,
-            num_sampled_keys=U_part,
-            num_top_queries=u,
+            num_sampled_keys=num_sampled_keys,
+            num_top_queries=num_top_queries,
         )
 
         # add scale factor
-        scale = self.scale or 1.0 / sqrt(D)
+        scale = self.scale or 1.0 / sqrt(head_dim)
         if scale is not None:
-            scores_top = scores_top * scale
-        context = self._make_default_context(
+            top_query_scores = top_query_scores * scale
+        attn_output = self._make_default_context(
             value=values,
-            num_queries=L_Q,
+            num_queries=num_queries,
         )
         # update the context with selected top_k queries
-        context, attn = self._update_context_with_selected_queries(
-            context, values, scores_top, index, L_Q
+        attn_output, attn_weights = self._update_context_with_selected_queries(
+            attn_output,
+            values,
+            top_query_scores,
+            top_query_indices,
+            num_queries,
         )
 
-        return context.transpose(2, 1).contiguous(), attn
+        return attn_output.transpose(2, 1).contiguous(), attn_weights
