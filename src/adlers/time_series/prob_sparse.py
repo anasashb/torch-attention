@@ -216,36 +216,56 @@ class ProbAttention(nn.Module):
 
         return context
 
-    def _update_context(self, context_in, V, scores, index, L_Q, attn_mask):
-        B, H, L_V, D = V.shape
+    def _update_context_with_selected_queries(
+        self,
+        context,
+        value,
+        top_query_scores,
+        top_query_indices,
+        num_queries,
+        attn_mask,
+    ):
+        batch_size, num_heads, num_values, head_dim = value.shape
 
         if self.mask_flag:
-            attn_mask = ProbMask(B, H, L_Q, index, scores, device=V.device)
-            scores.masked_fill_(attn_mask.mask, -np.inf)
-
-        attn = torch.softmax(scores, dim=-1)  # nn.Softmax(dim=-1)(scores)
-
-        context_in[
-            torch.arange(B)[:, None, None],
-            torch.arange(H)[None, :, None],
-            index,
-            :,
-        ] = torch.matmul(attn, V).type_as(context_in)
-        if self.output_attention:
-            attns = (
-                (torch.ones([B, H, L_V, L_V]) / L_V)
-                .type_as(attn)
-                .to(attn.device)
+            attn_mask = ProbMask(
+                batch_size,
+                num_heads,
+                num_queries,
+                top_query_indices,
+                top_query_scores,
+                device=value.device,
             )
-            attns[
-                torch.arange(B)[:, None, None],
-                torch.arange(H)[None, :, None],
-                index,
+            top_query_scores.masked_fill_(attn_mask.mask, -np.inf)
+
+        top_query_weights = torch.softmax(
+            top_query_scores, dim=-1
+        )  # nn.Softmax(dim=-1)(scores)
+
+        context[
+            torch.arange(batch_size)[:, None, None],
+            torch.arange(num_heads)[None, :, None],
+            top_query_indices,
+            :,
+        ] = torch.matmul(top_query_weights, value).type_as(context)
+        if self.output_attention:
+            attn_weights = (
+                (
+                    torch.ones([batch_size, num_heads, num_values, num_values])
+                    / num_values
+                )
+                .type_as(top_query_weights)
+                .to(top_query_weights.device)
+            )
+            attn_weights[
+                torch.arange(batch_size)[:, None, None],
+                torch.arange(num_heads)[None, :, None],
+                top_query_indices,
                 :,
-            ] = attn
-            return (context_in, attns)
+            ] = top_query_weights
+            return (context, attn_weights)
         else:
-            return (context_in, None)
+            return (context, None)
 
     def forward(self, queries, keys, values, attn_mask):
         B, L_Q, H, D = queries.shape
@@ -279,7 +299,7 @@ class ProbAttention(nn.Module):
             num_queries=L_Q,
         )
         # update the context with selected top_k queries
-        context, attn = self._update_context(
+        context, attn = self._update_context_with_selected_queries(
             context, values, scores_top, index, L_Q, attn_mask
         )
 
