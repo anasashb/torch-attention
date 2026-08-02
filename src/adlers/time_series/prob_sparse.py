@@ -218,13 +218,46 @@ class ProbAttention(nn.Module):
 
     def _update_context_with_selected_queries(
         self,
-        context,
-        value,
-        top_query_scores,
-        top_query_indices,
-        num_queries,
-    ):
-        batch_size, num_heads, num_values, head_dim = value.shape
+        context: Tensor,
+        value: Tensor,
+        top_query_scores: Tensor,
+        top_query_indices: Tensor,
+        num_queries: int,
+    ) -> tuple[Tensor, Tensor | None]:
+        """
+        Updates the default context using the selected queries.
+
+        The selected query scores are converted to attention weights and
+        combined with the values to produce the selected-query context (`S1` in
+        step 6 of Algorithm 1 in the Informer paper). These rows replace their
+        corresponding rows in the default context (`S0`), producing the final
+        context (`S` in step 8 of the algorithm).
+
+        In causal attention, scores for future key positions are masked before
+        the attention weights are calculated. When attention weights are
+        requested, unselected queries retain uniform rows and selected queries
+        receive their calculated weights.
+
+        Args:
+            context (Tensor): Default context tensor of shape [batch_size,
+                num_heads, num_queries, head_dim]. Selected query rows are
+                replaced in place.
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_values, head_dim].
+            top_query_scores (Tensor): Scores for the selected queries with
+                shape [batch_size, num_heads, num_top_queries, num_values].
+                Future positions are masked in place during causal attention.
+            top_query_indices (Tensor): Selected query indices of shape
+                [batch_size, num_heads, num_top_queries].
+            num_queries (int): Number of query positions.
+
+        Returns:
+            context (Tensor): Final context tensor of shape [batch_size,
+                num_heads, num_queries, head_dim].
+            attn_weights (Tensor | None): Approximate dense attention weights,
+                or None when attention weights are not requested.
+        """
+        batch_size, num_heads, num_values, _ = value.shape
 
         if self.mask_flag:
             selected_query_causal_mask = ProbMask(
@@ -235,21 +268,25 @@ class ProbAttention(nn.Module):
                 top_query_scores,
                 device=value.device,
             )
+
             top_query_scores.masked_fill_(
                 selected_query_causal_mask.mask,
                 -np.inf,
             )
 
-        top_query_weights = torch.softmax(
-            top_query_scores, dim=-1
-        )  # nn.Softmax(dim=-1)(scores)
+        # Attention weights used to compute the selected-query context
+        # (S1 in step 6 of Algorithm 1 in the Informer paper)
+        top_query_weights = torch.softmax(top_query_scores, dim=-1)
 
+        # Insert S1 into S0 at the selected rows to produce S
+        # (step 8 of Algorithm 1 in the Informer paper)
         context[
             torch.arange(batch_size)[:, None, None],
             torch.arange(num_heads)[None, :, None],
             top_query_indices,
             :,
         ] = torch.matmul(top_query_weights, value).type_as(context)
+
         if self.output_attention:
             attn_weights = (
                 (
@@ -259,13 +296,16 @@ class ProbAttention(nn.Module):
                 .type_as(top_query_weights)
                 .to(top_query_weights.device)
             )
+
             attn_weights[
                 torch.arange(batch_size)[:, None, None],
                 torch.arange(num_heads)[None, :, None],
                 top_query_indices,
                 :,
             ] = top_query_weights
+
             return (context, attn_weights)
+
         else:
             return (context, None)
 
