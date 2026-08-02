@@ -64,37 +64,74 @@ class ProbAttention(nn.Module):
         self.output_attention = output_attention
         self.dropout = nn.Dropout(attention_dropout)
 
-    def _prob_QK(self, Q, K, sample_k, n_top):  # n_top: c*ln(L_q)
-        # Q [B, H, L, D]
-        B, H, L_K, E = K.shape
-        _, _, L_Q, _ = Q.shape
+    def _compute_top_query_scores(
+        self,
+        query,
+        key,
+        num_sampled_keys,
+        num_top_queries,
+    ):
+        batch_size, num_heads, num_keys, head_dim = key.shape
+        _, _, num_queries, _ = query.shape
 
-        # calculate the sampled Q_K
-        K_expand = K.unsqueeze(-3).expand(B, H, L_Q, L_K, E)
-        index_sample = torch.randint(
-            L_K, (L_Q, sample_k)
-        )  # real U = U_part(factor*ln(L_k))*L_q
-        K_sample = K_expand[
-            :, :, torch.arange(L_Q).unsqueeze(1), index_sample, :
+        # Add a query axis so each query can gather its own sampled keys
+        expanded_key = key.unsqueeze(-3).expand(
+            batch_size,
+            num_heads,
+            num_queries,
+            num_keys,
+            head_dim,
+        )
+
+        # One row of sampled key positions per query
+        sampled_key_indices = torch.randint(
+            num_keys,
+            (num_queries, num_sampled_keys),
+        )
+
+        # Pair each query with its row of sampled key positions
+        sampled_keys = expanded_key[
+            :,
+            :,
+            torch.arange(num_queries).unsqueeze(1),
+            sampled_key_indices,
+            :,
         ]
-        Q_K_sample = torch.matmul(
-            Q.unsqueeze(-2), K_sample.transpose(-2, -1)
+
+        # Sampled query-key scores (S_bar in Algorithm 1 of Informer paper)
+        sampled_query_key_scores = torch.matmul(
+            query.unsqueeze(-2), sampled_keys.transpose(-2, -1)
         ).squeeze(-2)
 
-        # find the Top_k query with sparisty measurement
-        M = Q_K_sample.max(-1)[0] - torch.div(Q_K_sample.sum(-1), L_K)
-        M_top = M.topk(n_top, sorted=False)[1]
+        # Approximate query sparsity measurement (M_bar in Equation 4 of the
+        # Informer paper)
+        query_sparsity_measurements = sampled_query_key_scores.max(-1)[
+            0
+        ] - torch.div(sampled_query_key_scores.sum(-1), num_keys)
 
-        # use the reduced Q to calculate Q_K
-        Q_reduce = Q[
-            torch.arange(B)[:, None, None],
-            torch.arange(H)[None, :, None],
-            M_top,
+        # Select Top-u queries under M_bar (steps 4-5 of Algorithm 1 in the
+        # Informer paper)
+        top_query_indices = query_sparsity_measurements.topk(
+            num_top_queries,
+            sorted=False,
+        )[1]
+
+        # Top-u query vectors (Q_bar in Algorithm 1 of the Informer paper)
+        top_queries = query[
+            torch.arange(batch_size)[:, None, None],
+            torch.arange(num_heads)[None, :, None],
+            top_query_indices,
             :,
-        ]  # factor*ln(L_q)
-        Q_K = torch.matmul(Q_reduce, K.transpose(-2, -1))  # factor*ln(L_q)*L_k
+        ]
 
-        return Q_K, M_top
+        # Scores for Q_bar against every key (used to compute S1 in step 6 of
+        # Algorithm 1 in the Informer paper)
+        top_query_scores = torch.matmul(
+            top_queries,
+            key.transpose(-2, -1),
+        )
+
+        return top_query_scores, top_query_indices
 
     def _get_initial_context(self, V, L_Q):
         B, H, L_V, D = V.shape
@@ -158,8 +195,11 @@ class ProbAttention(nn.Module):
         U_part = U_part if U_part < L_K else L_K
         u = u if u < L_Q else L_Q
 
-        scores_top, index = self._prob_QK(
-            queries, keys, sample_k=U_part, n_top=u
+        scores_top, index = self._compute_top_query_scores(
+            query=queries,
+            key=keys,
+            num_sampled_keys=U_part,
+            num_top_queries=u,
         )
 
         # add scale factor
