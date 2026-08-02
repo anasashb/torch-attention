@@ -223,12 +223,11 @@ class ProbAttention(nn.Module):
         top_query_scores,
         top_query_indices,
         num_queries,
-        attn_mask,
     ):
         batch_size, num_heads, num_values, head_dim = value.shape
 
         if self.mask_flag:
-            attn_mask = ProbMask(
+            selected_query_causal_mask = ProbMask(
                 batch_size,
                 num_heads,
                 num_queries,
@@ -236,7 +235,10 @@ class ProbAttention(nn.Module):
                 top_query_scores,
                 device=value.device,
             )
-            top_query_scores.masked_fill_(attn_mask.mask, -np.inf)
+            top_query_scores.masked_fill_(
+                selected_query_causal_mask.mask,
+                -np.inf,
+            )
 
         top_query_weights = torch.softmax(
             top_query_scores, dim=-1
@@ -300,7 +302,7 @@ class ProbAttention(nn.Module):
         )
         # update the context with selected top_k queries
         context, attn = self._update_context_with_selected_queries(
-            context, values, scores_top, index, L_Q, attn_mask
+            context, values, scores_top, index, L_Q
         )
 
         return context.transpose(2, 1).contiguous(), attn
