@@ -310,12 +310,8 @@ class ProbAttention(nn.Module):
             return (context, None)
 
     def forward(self, queries, keys, values, attn_mask):
-        batch_size, num_queries, num_heads, head_dim = queries.shape
-        _, num_keys, _, _ = keys.shape
-
-        queries = queries.transpose(2, 1)
-        keys = keys.transpose(2, 1)
-        values = values.transpose(2, 1)
+        batch_size, num_heads, num_queries, head_dim = queries.shape
+        _, _, num_keys, _ = keys.shape
 
         num_sampled_keys = (
             self.factor * np.ceil(np.log(num_keys)).astype("int").item()
@@ -355,4 +351,4 @@ class ProbAttention(nn.Module):
             num_queries,
         )
 
-        return attn_output.transpose(2, 1).contiguous(), attn_weights
+        return attn_output, attn_weights
