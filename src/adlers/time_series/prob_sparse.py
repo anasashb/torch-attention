@@ -58,15 +58,34 @@ class ProbMask:
 
 
 class ProbSparseAttention(nn.Module):
+    """
+    Implements Informer's ProbSparse attention mechanism.
+
+    Keys are sampled to approximate each query's sparsity measurement. Full
+    attention is then calculated for the selected Top-u queries. Unselected
+    queries retain the default context (`S0` in Algorithm 1 of the Informer
+    paper).
+
+    Attributes:
+        factor (int): Sampling factor `c` used to determine how many keys are
+            sampled and queries selected.
+        custom_scale_factor (float | None): Scale applied to selected
+            query-key scores.
+        is_causal (bool): Whether queries can attend to future key positions.
+        output_attention_scores (bool): Whether forward() returns attention
+            weights.
+        strict_mode (bool): Whether input shapes are validated on every call.
+    """
+
     def __init__(
         self,
-        is_causal=False,
-        factor=5,
-        custom_scale_factor=None,
-        dropout_rate=0.0,
-        output_attention_scores=False,
-        strict_mode=True,
-    ):
+        is_causal: bool = False,
+        factor: int = 5,
+        custom_scale_factor: float | None = None,
+        dropout_rate: float = 0.0,
+        output_attention_scores: bool = False,
+        strict_mode: bool = True,
+    ) -> None:
         if factor <= 0:
             raise ValueError(
                 f"ProbSparse factor must be greater than 0; got {factor}."
@@ -324,7 +343,36 @@ class ProbSparseAttention(nn.Module):
         else:
             return (context, None)
 
-    def forward(self, query, key, value, attn_mask=None):
+    def forward(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor | None]:
+        """
+        Computes ProbSparse attention.
+
+        Args:
+            query (Tensor): Query tensor of shape [batch_size, num_heads,
+                num_queries, head_dim].
+            key (Tensor): Key tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            attn_mask (Tensor | None): Must be None. Custom attention masks
+                are not supported.
+
+        Returns:
+            tuple[Tensor, Tensor | None]: The attention output and, when
+                requested, calculated weights for selected queries with
+                uniform weights for unselected queries.
+
+        Raises:
+            ValueError: If a custom attention mask is supplied, an input shape
+                is invalid, or causal attention receives different query and
+                value lengths.
+        """
         if attn_mask is not None:
             raise ValueError(
                 "ProbSparse attention does not support custom attention masks; "
