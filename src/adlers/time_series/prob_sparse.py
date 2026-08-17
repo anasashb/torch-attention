@@ -310,6 +310,12 @@ class ProbSparseAttention(nn.Module):
             return (context, None)
 
     def forward(self, query, key, value, attn_mask):
+        if attn_mask is not None:
+            raise ValueError(
+                "ProbSparse attention does not support custom attention masks; "
+                f"got shape {tuple(attn_mask.shape)}. Pass attn_mask=None."
+            )
+
         batch_size, num_heads, num_queries, head_dim = query.shape
         _, _, num_keys, _ = key.shape
 
