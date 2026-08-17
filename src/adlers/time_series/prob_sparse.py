@@ -324,7 +324,7 @@ class ProbSparseAttention(nn.Module):
         if self.output_attention_scores:
             attn_weights = (
                 (
-                    torch.ones([batch_size, num_heads, num_values, num_values])
+                    torch.ones([batch_size, num_heads, num_queries, num_values])
                     / num_values
                 )
                 .type_as(top_query_weights)
