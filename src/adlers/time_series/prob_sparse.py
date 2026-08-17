@@ -415,9 +415,12 @@ class ProbSparseAttention(nn.Module):
         )
 
         # add scale factor
-        scale_factor = self.custom_scale_factor or 1.0 / sqrt(head_dim)
-        if scale_factor is not None:
-            top_query_scores = top_query_scores * scale_factor
+        if self.custom_scale_factor is not None:
+            scale_factor = self.custom_scale_factor
+        else:
+            scale_factor = 1.0 / sqrt(head_dim)
+
+        top_query_scores = top_query_scores * scale_factor
         attn_output = self._make_default_context(
             value=value,
             num_queries=num_queries,
