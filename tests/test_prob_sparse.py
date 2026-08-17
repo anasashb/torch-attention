@@ -168,6 +168,31 @@ def test_prob_sparse_supports_single_position_sequences(
     torch.testing.assert_close(weights, torch.ones_like(weights))
 
 
+def test_prob_sparse_uses_zero_custom_scale_factor() -> None:
+    """Checks that zero overrides the default attention scale."""
+    query = torch.tensor([[[[1.0], [2.0]]]])
+    key = torch.tensor([[[[1.0], [2.0]]]])
+    value = torch.tensor([[[[3.0], [5.0]]]])
+    attention = ProbSparseAttention(
+        is_causal=False,
+        factor=2,
+        custom_scale_factor=0.0,
+        output_attention_scores=True,
+    )
+
+    output, weights = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    assert weights is not None
+    torch.testing.assert_close(weights, torch.full_like(weights, 0.5))
+    expected_output = value.mean(dim=-2, keepdim=True).expand_as(output)
+    torch.testing.assert_close(output, expected_output)
+
+
 def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
     """Checks that causal attention requires equal query and value lengths."""
     query = torch.zeros(1, 1, 3, 2)
