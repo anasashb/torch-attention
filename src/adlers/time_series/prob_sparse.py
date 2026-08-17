@@ -20,6 +20,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from adlers.shared._attention_base import AttentionBase
+
 
 class ProbMask:
     def __init__(
@@ -63,6 +65,7 @@ class ProbSparseAttention(nn.Module):
         custom_scale_factor=None,
         dropout_rate=0.1,
         output_attention_scores=False,
+        strict_mode=True,
     ):
         if factor <= 0:
             raise ValueError(
@@ -74,6 +77,7 @@ class ProbSparseAttention(nn.Module):
         self.custom_scale_factor = custom_scale_factor
         self.is_causal = is_causal
         self.output_attention_scores = output_attention_scores
+        self.strict_mode = strict_mode
         self.dropout = nn.Dropout(dropout_rate)
 
     def _compute_top_query_scores(
@@ -319,6 +323,15 @@ class ProbSparseAttention(nn.Module):
             raise ValueError(
                 "ProbSparse attention does not support custom attention masks; "
                 f"got shape {tuple(attn_mask.shape)}. Pass attn_mask=None."
+            )
+
+        # borrowing _validate_shapes from AttentionBase w/o inheriting yet
+        if self.strict_mode:
+            AttentionBase._validate_shapes(
+                query=query,
+                key=key,
+                value=value,
+                attn_mask=None,
             )
 
         batch_size, num_heads, num_queries, head_dim = query.shape
