@@ -1,0 +1,16 @@
+ADLERS
+
+This project includes software adapted from Informer2020:
+https://github.com/zhouhaoyi/Informer2020
+
+Source revision:
+29f2a739226a509202a092b464163da81fa74960
+
+The adapted code is located in:
+src/adlers/time_series/prob_sparse.py
+
+Informer2020 is licensed under the Apache License, Version 2.0.
+See LICENSES/Apache-2.0.txt.
+
+Except for files that state otherwise, ADLERS is licensed under the MIT
+License. See LICENSE.

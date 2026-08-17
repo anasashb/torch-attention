@@ -12,7 +12,7 @@ Unified attention mechanisms for PyTorch across NLP, vision, and time series.
 ```python
 import torch
 
-from adlers import ScaledDotProductAttention
+from adlers import ProbSparseAttention, ScaledDotProductAttention
 
 query = torch.randn(2, 4, 16, 32)
 key = torch.randn(2, 4, 16, 32)
@@ -29,6 +29,19 @@ Use `backend="einsum"` when attention weights are needed. Use `backend="sdpa"`
 to delegate to PyTorch's optimized scaled dot-product attention implementation
 when weights are not needed.
 
+### ProbSparse attention
+
+`ProbSparseAttention` implements
+[Informer's ProbSparse attention](https://arxiv.org/abs/2012.07436).
+
+```python
+attention = ProbSparseAttention(is_causal=True)
+output, weights = attention(query=query, key=key, value=value)
+```
+
+Custom attention masks and nonzero dropout are not currently supported, because
+the original implementation does not support them.
+
 ## Supported Tensor and mask shapes
 
 `ScaledDotProductAttention` expects query, key, and value tensors with the
@@ -41,7 +54,7 @@ value: [batch_size, num_heads, num_keys, head_dim]
 ```
 
 The query and key lengths can differ, so the same module works for both
-self-attention and cross-attention. But, ey and value lengths must match. Batch
+self-attention and cross-attention. But key and value lengths must match. Batch
 size, head count, and head dimension must match across all three tensors.
 
 For now, attention masks must use `torch.bool`. `True` marks a position that

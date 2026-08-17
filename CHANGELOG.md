@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-08-17
+
+### Added
+
+- Added Informer's ProbSparse attention mechanism for causal self-attention
+  and non-causal cross-attention, with optional attention weights.
+- Made `ProbSparseAttention` available from `adlers` and
+  `adlers.time_series`.
+- Included the Apache 2.0 license and attribution for the Informer code
+  adapted in this release.
+
 ## [0.4.0] - 2026-07-25
 
 ### Added
