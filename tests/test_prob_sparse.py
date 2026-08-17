@@ -118,3 +118,30 @@ def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
         "Causal ProbSparse attention requires query and value tensors to have "
         "the same sequence length; got query length 3 and value length 4."
     )
+
+
+def test_prob_sparse_rejects_custom_attention_masks() -> None:
+    """Checks that ProbSparse rejects unsupported custom attention masks."""
+    query = torch.zeros(1, 1, 3, 2)
+    key = torch.zeros(1, 1, 3, 2)
+    value = torch.zeros(1, 1, 3, 2)
+    attn_mask = torch.zeros(3, 3, dtype=torch.bool)
+    attention = ProbSparseAttention(
+        is_causal=False,
+        factor=1,
+        dropout_rate=0.0,
+        output_attention_scores=False,
+    )
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+        )
+
+    assert str(error.value) == (
+        "ProbSparse attention does not support custom attention masks; "
+        "got shape (3, 3). Pass attn_mask=None."
+    )
