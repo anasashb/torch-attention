@@ -324,7 +324,7 @@ class ProbSparseAttention(nn.Module):
         else:
             return (context, None)
 
-    def forward(self, query, key, value, attn_mask):
+    def forward(self, query, key, value, attn_mask=None):
         if attn_mask is not None:
             raise ValueError(
                 "ProbSparse attention does not support custom attention masks; "
