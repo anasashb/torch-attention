@@ -145,3 +145,19 @@ def test_prob_sparse_rejects_custom_attention_masks() -> None:
         "ProbSparse attention does not support custom attention masks; "
         "got shape (3, 3). Pass attn_mask=None."
     )
+
+
+@pytest.mark.parametrize("factor", [0, -1])
+def test_prob_sparse_rejects_non_positive_factors(factor: int) -> None:
+    """Checks that the ProbSparse sampling factor is positive."""
+    with pytest.raises(ValueError) as error:
+        ProbSparseAttention(
+            is_causal=False,
+            factor=factor,
+            dropout_rate=0.0,
+            output_attention_scores=False,
+        )
+
+    assert str(error.value) == (
+        f"ProbSparse factor must be greater than 0; got {factor}."
+    )
