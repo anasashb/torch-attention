@@ -64,6 +64,11 @@ class ProbSparseAttention(nn.Module):
         dropout_rate=0.1,
         output_attention_scores=False,
     ):
+        if factor <= 0:
+            raise ValueError(
+                f"ProbSparse factor must be greater than 0; got {factor}."
+            )
+
         super().__init__()
         self.factor = factor
         self.custom_scale_factor = custom_scale_factor
