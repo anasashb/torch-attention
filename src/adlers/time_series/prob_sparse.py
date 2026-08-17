@@ -63,13 +63,19 @@ class ProbSparseAttention(nn.Module):
         is_causal=True,
         factor=5,
         custom_scale_factor=None,
-        dropout_rate=0.1,
+        dropout_rate=0.0,
         output_attention_scores=False,
         strict_mode=True,
     ):
         if factor <= 0:
             raise ValueError(
                 f"ProbSparse factor must be greater than 0; got {factor}."
+            )
+
+        if dropout_rate != 0.0:
+            raise ValueError(
+                "ProbSparse attention does not support dropout; "
+                f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
             )
 
         super().__init__()
