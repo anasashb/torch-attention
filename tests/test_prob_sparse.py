@@ -210,3 +210,19 @@ def test_prob_sparse_rejects_non_four_dimensional_qkv_tensors(
         "[batch_size, num_heads, sequence_length, head_dim]; "
         f"got shape {tuple(tensors[tensor_index].shape)}."
     )
+
+
+def test_prob_sparse_rejects_nonzero_dropout_rate() -> None:
+    """Checks that unsupported ProbSparse dropout is rejected."""
+    with pytest.raises(ValueError) as error:
+        ProbSparseAttention(
+            is_causal=False,
+            factor=1,
+            dropout_rate=0.1,
+            output_attention_scores=False,
+        )
+
+    assert str(error.value) == (
+        "ProbSparse attention does not support dropout; got dropout_rate 0.1. "
+        "Set dropout_rate=0.0."
+    )
