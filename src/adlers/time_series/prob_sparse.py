@@ -60,7 +60,7 @@ class ProbMask:
 class ProbSparseAttention(nn.Module):
     def __init__(
         self,
-        is_causal=True,
+        is_causal=False,
         factor=5,
         custom_scale_factor=None,
         dropout_rate=0.0,
