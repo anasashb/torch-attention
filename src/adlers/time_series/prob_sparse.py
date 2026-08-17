@@ -23,38 +23,32 @@ from torch import Tensor
 from adlers.shared._attention_base import AttentionBase
 
 
-class ProbMask:
-    def __init__(
-        self,
-        batch_size: int,
-        num_heads: int,
-        num_queries: int,
-        query_indices: Tensor,
-        scores: Tensor,
-        device: torch.device | str = "cpu",
-    ) -> None:
-        _mask = (
-            torch.ones(num_queries, scores.shape[-1], dtype=torch.bool)
-            .to(device)
-            .triu(1)
-        )
-        _mask_ex = _mask[None, None, :].expand(
-            batch_size,
-            num_heads,
-            num_queries,
-            scores.shape[-1],
-        )
-        indicator = _mask_ex[
-            torch.arange(batch_size)[:, None, None],
-            torch.arange(num_heads)[None, :, None],
-            query_indices,
-            :,
-        ].to(device)
-        self._mask = indicator.view(scores.shape).to(device)
-
-    @property
-    def mask(self) -> Tensor:
-        return self._mask
+def _make_selected_query_causal_mask(
+    batch_size: int,
+    num_heads: int,
+    num_queries: int,
+    query_indices: Tensor,
+    scores: Tensor,
+    device: torch.device,
+) -> Tensor:
+    mask = (
+        torch.ones(num_queries, scores.shape[-1], dtype=torch.bool)
+        .to(device)
+        .triu(1)
+    )
+    expanded_mask = mask[None, None, :].expand(
+        batch_size,
+        num_heads,
+        num_queries,
+        scores.shape[-1],
+    )
+    selected_query_mask = expanded_mask[
+        torch.arange(batch_size)[:, None, None],
+        torch.arange(num_heads)[None, :, None],
+        query_indices,
+        :,
+    ].to(device)
+    return selected_query_mask.view(scores.shape).to(device)
 
 
 class ProbSparseAttention(nn.Module):
@@ -294,17 +288,17 @@ class ProbSparseAttention(nn.Module):
         batch_size, num_heads, num_values, _ = value.shape
 
         if self.is_causal:
-            selected_query_causal_mask = ProbMask(
-                batch_size,
-                num_heads,
-                num_queries,
-                top_query_indices,
-                top_query_scores,
+            selected_query_causal_mask = _make_selected_query_causal_mask(
+                batch_size=batch_size,
+                num_heads=num_heads,
+                num_queries=num_queries,
+                query_indices=top_query_indices,
+                scores=top_query_scores,
                 device=value.device,
             )
 
             top_query_scores.masked_fill_(
-                selected_query_causal_mask.mask,
+                selected_query_causal_mask,
                 -np.inf,
             )
 
