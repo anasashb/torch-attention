@@ -18,10 +18,12 @@ from adlers.time_series.prob_sparse import ProbAttention
             torch.tensor(
                 [
                     [
-                        [[4.0, 5.0]],
-                        [[4.0, 5.0]],
-                        [[4.2044735, 5.2044735]],
-                        [[2.412292, 3.412292]],
+                        [
+                            [4.0, 5.0],
+                            [4.0, 5.0],
+                            [4.2044735, 5.2044735],
+                            [2.412292, 3.412292],
+                        ]
                     ]
                 ]
             ),
@@ -34,10 +36,12 @@ from adlers.time_series.prob_sparse import ProbAttention
             torch.tensor(
                 [
                     [
-                        [[1.0, 2.0]],
-                        [[4.0, 6.0]],
-                        [[3.5104697, 4.5104694]],
-                        [[2.412292, 3.412292]],
+                        [
+                            [1.0, 2.0],
+                            [4.0, 6.0],
+                            [3.5104697, 4.5104694],
+                            [2.412292, 3.412292],
+                        ]
                     ]
                 ]
             ),
@@ -65,14 +69,10 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
 ) -> None:
     """Checks the pinned Informer outputs for sparse query selection."""
     queries = torch.tensor(
-        [[[[1.0, 0.0]], [[0.0, 1.0]], [[1.0, 1.0]], [[2.0, -1.0]]]]
+        [[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, -1.0]]]]
     )
-    keys = torch.tensor(
-        [[[[1.0, 0.0]], [[0.0, 1.0]], [[1.0, 1.0]], [[-1.0, 2.0]]]]
-    )
-    values = torch.tensor(
-        [[[[1.0, 2.0]], [[3.0, 4.0]], [[5.0, 6.0]], [[7.0, 8.0]]]]
-    )
+    keys = torch.tensor([[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 2.0]]]])
+    values = torch.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]]])
     attention = ProbAttention(
         mask_flag=mask_flag,
         factor=1,
@@ -98,9 +98,9 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
 
 def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
     """Checks that causal attention requires equal query and value lengths."""
-    queries = torch.zeros(1, 3, 1, 2)
-    keys = torch.zeros(1, 4, 1, 2)
-    values = torch.zeros(1, 4, 1, 2)
+    queries = torch.zeros(1, 1, 3, 2)
+    keys = torch.zeros(1, 1, 4, 2)
+    values = torch.zeros(1, 1, 4, 2)
     attention = ProbAttention(
         mask_flag=True,
         factor=1,
