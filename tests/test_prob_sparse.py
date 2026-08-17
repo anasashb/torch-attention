@@ -1,13 +1,13 @@
 import pytest
 import torch
 
-from adlers.time_series.prob_sparse import ProbAttention
+from adlers.time_series.prob_sparse import ProbSparseAttention
 
 
 @pytest.mark.parametrize(
     (
-        "mask_flag",
-        "output_attention",
+        "is_causal",
+        "output_attention_scores",
         "expected_output",
         "expected_weights",
     ),
@@ -62,29 +62,27 @@ from adlers.time_series.prob_sparse import ProbAttention
     ],
 )
 def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
-    mask_flag: bool,
-    output_attention: bool,
+    is_causal: bool,
+    output_attention_scores: bool,
     expected_output: torch.Tensor,
     expected_weights: torch.Tensor | None,
 ) -> None:
     """Checks the pinned Informer outputs for sparse query selection."""
-    queries = torch.tensor(
-        [[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, -1.0]]]]
-    )
-    keys = torch.tensor([[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 2.0]]]])
-    values = torch.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]]])
-    attention = ProbAttention(
-        mask_flag=mask_flag,
+    query = torch.tensor([[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, -1.0]]]])
+    key = torch.tensor([[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 2.0]]]])
+    value = torch.tensor([[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]]])
+    attention = ProbSparseAttention(
+        is_causal=is_causal,
         factor=1,
-        attention_dropout=0.0,
-        output_attention=output_attention,
+        dropout_rate=0.0,
+        output_attention_scores=output_attention_scores,
     )
     torch.manual_seed(seed=66)
 
     output, weights = attention(
-        queries=queries,
-        keys=keys,
-        values=values,
+        query=query,
+        key=key,
+        value=value,
         attn_mask=None,
     )
 
@@ -98,21 +96,21 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
 
 def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
     """Checks that causal attention requires equal query and value lengths."""
-    queries = torch.zeros(1, 1, 3, 2)
-    keys = torch.zeros(1, 1, 4, 2)
-    values = torch.zeros(1, 1, 4, 2)
-    attention = ProbAttention(
-        mask_flag=True,
+    query = torch.zeros(1, 1, 3, 2)
+    key = torch.zeros(1, 1, 4, 2)
+    value = torch.zeros(1, 1, 4, 2)
+    attention = ProbSparseAttention(
+        is_causal=True,
         factor=1,
-        attention_dropout=0.0,
-        output_attention=False,
+        dropout_rate=0.0,
+        output_attention_scores=False,
     )
 
     with pytest.raises(ValueError) as error:
         attention(
-            queries=queries,
-            keys=keys,
-            values=values,
+            query=query,
+            key=key,
+            value=value,
             attn_mask=None,
         )
 
