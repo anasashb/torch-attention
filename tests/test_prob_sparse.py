@@ -137,6 +137,37 @@ def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
     )
 
 
+@pytest.mark.parametrize("is_causal", [False, True])
+def test_prob_sparse_supports_single_position_sequences(
+    is_causal: bool,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks ProbSparse attention with one query and key position."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=3,
+        num_queries=1,
+        num_keys=1,
+        head_dim=4,
+    )
+    attention = ProbSparseAttention(
+        is_causal=is_causal,
+        factor=1,
+        output_attention_scores=True,
+    )
+
+    output, weights = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    assert weights is not None
+    torch.testing.assert_close(output, value)
+    torch.testing.assert_close(weights, torch.ones_like(weights))
+
+
 def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
     """Checks that causal attention requires equal query and value lengths."""
     query = torch.zeros(1, 1, 3, 2)
