@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from adlers.time_series.prob_sparse import ProbSparseAttention
+from adlers.time_series import ProbSparseAttention
 from tests._typing import MakeQKV
 
 
