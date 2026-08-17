@@ -55,21 +55,21 @@ class ProbMask:
         return self._mask
 
 
-class ProbAttention(nn.Module):
+class ProbSparseAttention(nn.Module):
     def __init__(
         self,
-        mask_flag=True,
+        is_causal=True,
         factor=5,
-        scale=None,
-        attention_dropout=0.1,
-        output_attention=False,
+        custom_scale_factor=None,
+        dropout_rate=0.1,
+        output_attention_scores=False,
     ):
         super().__init__()
         self.factor = factor
-        self.scale = scale
-        self.mask_flag = mask_flag
-        self.output_attention = output_attention
-        self.dropout = nn.Dropout(attention_dropout)
+        self.custom_scale_factor = custom_scale_factor
+        self.is_causal = is_causal
+        self.output_attention_scores = output_attention_scores
+        self.dropout = nn.Dropout(dropout_rate)
 
     def _compute_top_query_scores(
         self,
@@ -195,7 +195,7 @@ class ProbAttention(nn.Module):
         """
         batch_size, num_heads, num_values, head_dim = value.shape
 
-        if not self.mask_flag:
+        if not self.is_causal:
             mean_value = value.mean(dim=-2)
             context = (
                 mean_value.unsqueeze(-2)
@@ -259,7 +259,7 @@ class ProbAttention(nn.Module):
         """
         batch_size, num_heads, num_values, _ = value.shape
 
-        if self.mask_flag:
+        if self.is_causal:
             selected_query_causal_mask = ProbMask(
                 batch_size,
                 num_heads,
@@ -287,7 +287,7 @@ class ProbAttention(nn.Module):
             :,
         ] = torch.matmul(top_query_weights, value).type_as(context)
 
-        if self.output_attention:
+        if self.output_attention_scores:
             attn_weights = (
                 (
                     torch.ones([batch_size, num_heads, num_values, num_values])
@@ -309,9 +309,9 @@ class ProbAttention(nn.Module):
         else:
             return (context, None)
 
-    def forward(self, queries, keys, values, attn_mask):
-        batch_size, num_heads, num_queries, head_dim = queries.shape
-        _, _, num_keys, _ = keys.shape
+    def forward(self, query, key, value, attn_mask):
+        batch_size, num_heads, num_queries, head_dim = query.shape
+        _, _, num_keys, _ = key.shape
 
         num_sampled_keys = (
             self.factor * np.ceil(np.log(num_keys)).astype("int").item()
@@ -328,24 +328,24 @@ class ProbAttention(nn.Module):
         )
 
         top_query_scores, top_query_indices = self._compute_top_query_scores(
-            query=queries,
-            key=keys,
+            query=query,
+            key=key,
             num_sampled_keys=num_sampled_keys,
             num_top_queries=num_top_queries,
         )
 
         # add scale factor
-        scale = self.scale or 1.0 / sqrt(head_dim)
-        if scale is not None:
-            top_query_scores = top_query_scores * scale
+        scale_factor = self.custom_scale_factor or 1.0 / sqrt(head_dim)
+        if scale_factor is not None:
+            top_query_scores = top_query_scores * scale_factor
         attn_output = self._make_default_context(
-            value=values,
+            value=value,
             num_queries=num_queries,
         )
         # update the context with selected top_k queries
         attn_output, attn_weights = self._update_context_with_selected_queries(
             attn_output,
-            values,
+            value,
             top_query_scores,
             top_query_indices,
             num_queries,
