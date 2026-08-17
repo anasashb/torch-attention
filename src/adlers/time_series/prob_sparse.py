@@ -391,11 +391,13 @@ class ProbSparseAttention(nn.Module):
         batch_size, num_heads, num_queries, head_dim = query.shape
         _, _, num_keys, _ = key.shape
 
-        num_sampled_keys = (
-            self.factor * np.ceil(np.log(num_keys)).astype("int").item()
+        num_sampled_keys = max(
+            1,
+            self.factor * np.ceil(np.log(num_keys)).astype("int").item(),
         )  # c*ln(L_k)
-        num_top_queries = (
-            self.factor * np.ceil(np.log(num_queries)).astype("int").item()
+        num_top_queries = max(
+            1,
+            self.factor * np.ceil(np.log(num_queries)).astype("int").item(),
         )  # c*ln(L_q)
 
         num_sampled_keys = (
