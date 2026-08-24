@@ -1,6 +1,7 @@
 import pytest
+import torch
 
-from benchmarks.benchmark_attention import main
+from benchmarks.benchmark_attention import _measure_cuda_memory, main
 
 
 def test_attention_latency_benchmark(
@@ -35,3 +36,35 @@ def test_attention_latency_benchmark(
     assert "inference" in output
     assert "training" in output
     assert "1x1x2x2" in output
+    assert "Peak Allocated Memory Delta (MiB)" in output
+
+
+def test_cuda_memory_measurement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Checks the peak allocated memory delta without requiring CUDA."""
+    calls = 0
+
+    def measured_call() -> None:
+        nonlocal calls
+        calls += 1
+
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda device: None)
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda device: 100)
+    monkeypatch.setattr(
+        torch.cuda,
+        "reset_peak_memory_stats",
+        lambda device: None,
+    )
+    monkeypatch.setattr(
+        torch.cuda,
+        "max_memory_allocated",
+        lambda device: 180,
+    )
+
+    peak_memory = _measure_cuda_memory(
+        measured_call=measured_call,
+        mode="inference",
+        device=torch.device("cuda"),
+    )
+
+    assert peak_memory == 80
+    assert calls == 1
