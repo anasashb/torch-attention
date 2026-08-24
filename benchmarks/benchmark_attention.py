@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import torch.utils.benchmark as benchmark
 from torch import Tensor
 
-from adlers import ScaledDotProductAttention
+from adlers import ProbSparseAttention, ScaledDotProductAttention
 
 _DEFAULT_SEQUENCE_LENGTHS = (128, 512, 2048)
 _DTYPES = {
@@ -21,6 +21,7 @@ _MECHANISM_LABELS = {
     "sdpa-auto": "PyTorch SDPA (auto)",
     "adlers-sdpa": "ADLERS SDPA (auto)",
     "adlers-einsum": "ADLERS einsum",
+    "adlers-probsparse": "ADLERS ProbSparse",
 }
 _SEED = 66
 
@@ -116,12 +117,21 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
-    attention = ScaledDotProductAttention(
-        is_causal=is_causal,
-        dropout_rate=0.0,
-        output_attention_scores=False,
-        strict_mode=True,
-        backend="sdpa" if mechanism == "adlers-sdpa" else "einsum",
+    attention = (
+        ProbSparseAttention(
+            is_causal=is_causal,
+            dropout_rate=0.0,
+            output_attention_scores=False,
+            strict_mode=True,
+        )
+        if mechanism == "adlers-probsparse"
+        else ScaledDotProductAttention(
+            is_causal=is_causal,
+            dropout_rate=0.0,
+            output_attention_scores=False,
+            strict_mode=True,
+            backend="sdpa" if mechanism == "adlers-sdpa" else "einsum",
+        )
     ).to(device=query.device)
 
     attention.train(mode=training)
