@@ -3,6 +3,7 @@
 import argparse
 import platform
 from collections.abc import Callable
+from itertools import product
 
 import torch
 import torch.nn.functional as F
@@ -55,7 +56,7 @@ def _device(value: str) -> torch.device:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Benchmark attention implementations  with warm inputs.",
+        description="Benchmark attention implementations with warm inputs.",
     )
     parser.add_argument(
         "--mechanism",
@@ -148,37 +149,56 @@ def _make_attention_call(
     return call_adlers
 
 
-def _measure_latency(
+def _make_execution_call(
     attention_call: Callable[[], Tensor],
     mode: str,
     query: Tensor,
     key: Tensor,
     value: Tensor,
+) -> Callable[[], object]:
+    if mode != "training":
+        return attention_call
+
+    gradient = torch.ones_like(query)
+
+    def run_forward_and_backward() -> None:
+        output = attention_call()
+        torch.autograd.grad(
+            outputs=output,
+            inputs=(query, key, value),
+            grad_outputs=gradient,
+        )
+
+    return run_forward_and_backward
+
+
+def _measure_latency(
+    measured_call: Callable[[], object],
+    mode: str,
     num_threads: int,
     min_run_time: float,
 ) -> benchmark.Measurement:
-
-    timed_call: Callable[[], object] = attention_call
-
-    if mode == "training":
-        gradient = torch.ones_like(query)
-
-        def run_forward_and_backward() -> None:
-            output = attention_call()
-            torch.autograd.grad(
-                outputs=output,
-                inputs=(query, key, value),
-                grad_outputs=gradient,
-            )
-
-        timed_call = run_forward_and_backward
-
     with torch.inference_mode(mode=mode == "inference"):
         return benchmark.Timer(
-            stmt="timed_call()",
-            globals={"timed_call": timed_call},
+            stmt="measured_call()",
+            globals={"measured_call": measured_call},
             num_threads=num_threads,
         ).blocked_autorange(min_run_time=min_run_time)
+
+
+def _measure_cuda_memory(
+    measured_call: Callable[[], object],
+    mode: str,
+    device: torch.device,
+) -> int:
+    with torch.inference_mode(mode=mode == "inference"):
+        torch.cuda.synchronize(device=device)
+        baseline = torch.cuda.memory_allocated(device=device)
+        torch.cuda.reset_peak_memory_stats(device=device)
+        measured_call()
+        torch.cuda.synchronize(device=device)
+
+    return torch.cuda.max_memory_allocated(device=device) - baseline
 
 
 def _print_benchmark_setup(
@@ -194,7 +214,7 @@ def _print_benchmark_setup(
         else f"CPU ({platform.machine()})"
     )
 
-    print("Attention latency benchmark")
+    print("Attention benchmark")
     print(f"Python: {platform.python_version()}")
     print(f"PyTorch: {torch.__version__}")
     print(f"Device: {device_name} [{device}]")
@@ -206,7 +226,7 @@ def _print_benchmark_setup(
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Run the attention latency benchmark."""
+    """Run the attention benchmark."""
 
     args = _parse_args(argv=argv)
     device: torch.device = args.device
@@ -233,62 +253,79 @@ def main(argv: list[str] | None = None) -> None:
 
     header = (
         f"{'Mechanism':<20} {'Mode':<10} {'Shape [B,H,L,D]':<20} "
-        f"{'Median (ms)':>12} {'IQR (ms)':>10}"
+        f"{'Median (ms)':>12} {'IQR (ms)':>10} "
+        f"{'Peak Allocated Memory Delta (MiB)':>33}"
     )
     print(header)
     print("-" * len(header))
 
-    for sequence_length in args.sequence_lengths:
-        for mode in modes:
-            training = mode == "training"
-            shape = (
-                args.batch_size,
-                args.heads,
-                sequence_length,
-                args.head_dim,
+    for sequence_length, mode, mechanism in product(
+        args.sequence_lengths,
+        modes,
+        mechanisms,
+    ):
+        training = mode == "training"
+        shape = (
+            args.batch_size,
+            args.heads,
+            sequence_length,
+            args.head_dim,
+        )
+        generator = torch.Generator(device=device).manual_seed(_SEED)
+        query, key, value = (
+            torch.randn(
+                shape,
+                device=device,
+                dtype=dtype,
+                generator=generator,
+                requires_grad=training,
             )
-            generator = torch.Generator(device=device).manual_seed(_SEED)
-            query, key, value = (
-                torch.randn(
-                    shape,
-                    device=device,
-                    dtype=dtype,
-                    generator=generator,
-                    requires_grad=training,
-                )
-                for _ in range(3)
+            for _ in range(3)
+        )
+
+        attention_call = _make_attention_call(
+            mechanism=mechanism,
+            query=query,
+            key=key,
+            value=value,
+            is_causal=args.causal,
+            training=training,
+        )
+
+        measured_call = _make_execution_call(
+            attention_call=attention_call,
+            mode=mode,
+            query=query,
+            key=key,
+            value=value,
+        )
+
+        latency_measurement = _measure_latency(
+            measured_call=measured_call,
+            mode=mode,
+            num_threads=args.num_threads,
+            min_run_time=args.min_run_time,
+        )
+
+        memory_label = "-"
+        if device.type == "cuda":
+            peak_memory = _measure_cuda_memory(
+                measured_call=measured_call,
+                mode=mode,
+                device=device,
             )
+            memory_label = f"{peak_memory / 1024**2:.2f}"
 
-            for mechanism in mechanisms:
-                attention_call = _make_attention_call(
-                    mechanism=mechanism,
-                    query=query,
-                    key=key,
-                    value=value,
-                    is_causal=args.causal,
-                    training=training,
-                )
-                latency_measurement = _measure_latency(
-                    attention_call=attention_call,
-                    mode=mode,
-                    query=query,
-                    key=key,
-                    value=value,
-                    num_threads=args.num_threads,
-                    min_run_time=args.min_run_time,
-                )
-
-                shape_label = (
-                    f"{args.batch_size}x{args.heads}x"
-                    f"{sequence_length}x{args.head_dim}"
-                )
-
-                print(
-                    f"{_MECHANISM_LABELS[mechanism]:<20} "
-                    f"{mode:<10} {shape_label:<20} "
-                    f"{latency_measurement.median * 1_000:>12.4f} "
-                    f"{latency_measurement.iqr * 1_000:>10.4f}"
-                )
+        shape_label = (
+            f"{args.batch_size}x{args.heads}x{sequence_length}x{args.head_dim}"
+        )
+        print(
+            f"{_MECHANISM_LABELS[mechanism]:<20} "
+            f"{mode:<10} {shape_label:<20} "
+            f"{latency_measurement.median * 1_000:>12.4f} "
+            f"{latency_measurement.iqr * 1_000:>10.4f} "
+            f"{memory_label:>33}"
+        )
 
 
 if __name__ == "__main__":
