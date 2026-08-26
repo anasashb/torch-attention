@@ -1,6 +1,7 @@
 """Benchmark attention implementations."""
 
 import argparse
+import json
 import platform
 import subprocess  # noqa: S404
 import sys
@@ -93,6 +94,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         type=float,
         default=0.2,
         help="Minimum seconds collected for each measurement.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write benchmark results to this JSON file.",
     )
     parser.add_argument(
         "--cpu-memory-worker",
@@ -235,16 +241,11 @@ def _measure_cpu_memory(
 
 def _print_benchmark_setup(
     device: torch.device,
+    device_name: str,
     dtype: torch.dtype,
     is_causal: bool,
     num_threads: int,
 ) -> None:
-    device_name = (
-        torch.cuda.get_device_name(device=device)
-        if device.type == "cuda"
-        else f"CPU ({platform.machine()})"
-    )
-
     print("Attention benchmark")
     print(f"Python: {platform.python_version()}")
     print(f"PyTorch: {torch.__version__}")
@@ -261,8 +262,15 @@ def main(argv: list[str] | None = None) -> None:
 
     args = _parse_args(argv=argv)
     device: torch.device = args.device
+    output: Path | None = args.output
     dtype = _DTYPES.get(args.dtype) or (
         torch.float16 if device.type == "cuda" else torch.float32
+    )
+    dtype_name = str(dtype).removeprefix("torch.")
+    device_name = (
+        torch.cuda.get_device_name(device=device)
+        if device.type == "cuda"
+        else f"CPU ({platform.machine()})"
     )
 
     if device.type == "cuda" and device.index is not None:
@@ -280,6 +288,7 @@ def main(argv: list[str] | None = None) -> None:
     else:
         _print_benchmark_setup(
             device=device,
+            device_name=device_name,
             dtype=dtype,
             is_causal=args.causal,
             num_threads=args.num_threads,
@@ -290,6 +299,11 @@ def main(argv: list[str] | None = None) -> None:
             if device.type == "cuda"
             else "Peak Process RSS Delta (MiB)"
         )
+        memory_metric = (
+            "peak_allocated_memory_delta"
+            if device.type == "cuda"
+            else "peak_process_rss_delta"
+        )
         header = (
             f"{'Mechanism':<20} {'Mode':<10} {'Shape [B,H,L,D]':<20} "
             f"{'Median (ms)':>12} {'IQR (ms)':>10} "
@@ -297,6 +311,8 @@ def main(argv: list[str] | None = None) -> None:
         )
         print(header)
         print("-" * len(header))
+
+    results: list[dict[str, object]] = []
 
     for sequence_length, mode, mechanism in product(
         args.sequence_lengths,
@@ -362,23 +378,26 @@ def main(argv: list[str] | None = None) -> None:
                 num_threads=args.num_threads,
             ).blocked_autorange(min_run_time=args.min_run_time)
 
-        memory_label = "unavailable"
+        memory_mib = None
         if device.type == "cuda":
             peak_memory = _measure_cuda_memory(
                 measured_call=measured_call,
                 mode=mode,
                 device=device,
             )
-            memory_label = f"{peak_memory / 1024**2:.2f}"
+            memory_mib = peak_memory / 1024**2
         elif sys.platform == "linux":
-            peak_process_rss = _measure_cpu_memory(
+            memory_mib = _measure_cpu_memory(
                 args=args,
                 dtype=dtype,
                 sequence_length=sequence_length,
                 mode=mode,
                 mechanism=mechanism,
             )
-            memory_label = f"{peak_process_rss:.2f}"
+
+        memory_label = (
+            "unavailable" if memory_mib is None else f"{memory_mib:.2f}"
+        )
 
         shape_label = (
             f"{args.batch_size}x{args.heads}x{sequence_length}x{args.head_dim}"
@@ -389,6 +408,50 @@ def main(argv: list[str] | None = None) -> None:
             f"{latency_measurement.median * 1_000:>12.4f} "
             f"{latency_measurement.iqr * 1_000:>10.4f} "
             f"{memory_label:>33}"
+        )
+
+        results.append(
+            {
+                "mechanism": mechanism,
+                "mode": mode,
+                "shape": list(shape),
+                "dtype": dtype_name,
+                "device": str(device),
+                "causal": args.causal,
+                "latency": {
+                    "median_seconds": latency_measurement.median,
+                    "iqr_seconds": latency_measurement.iqr,
+                },
+                "memory": {
+                    "metric": memory_metric,
+                    "value_mib": memory_mib,
+                },
+            }
+        )
+
+    if output is not None:
+        output.write_text(
+            data=json.dumps(
+                {
+                    "schema_version": 1,
+                    "environment": {
+                        "python_version": platform.python_version(),
+                        "pytorch_version": str(torch.__version__),
+                        "cuda_version": torch.version.cuda,
+                        "device": str(device),
+                        "device_name": device_name,
+                        "cpu_threads": args.num_threads,
+                    },
+                    "settings": {
+                        "minimum_run_time_seconds": args.min_run_time,
+                        "seed": _SEED,
+                    },
+                    "results": results,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
         )
 
 
