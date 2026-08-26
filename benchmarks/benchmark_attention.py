@@ -2,8 +2,11 @@
 
 import argparse
 import platform
+import subprocess  # noqa: S404
+import sys
 from collections.abc import Callable
-from itertools import product
+from itertools import chain, product
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -37,7 +40,6 @@ def _positive_int(value: str) -> int:
 
 
 def _device(value: str) -> torch.device:
-
     try:
         device = torch.device(value)
     except (RuntimeError, ValueError) as error:
@@ -92,6 +94,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=0.2,
         help="Minimum seconds collected for each measurement.",
     )
+    parser.add_argument(
+        "--cpu-memory-worker",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     return parser.parse_args(args=argv)
 
 
@@ -103,7 +110,6 @@ def _make_attention_call(
     is_causal: bool,
     training: bool,
 ) -> Callable[[], Tensor]:
-
     if mechanism == "sdpa-auto":
         # this is here only for us to compare that our SDPA wrapper does not
         # add too much compute overhead compared to torch's native function
@@ -172,20 +178,6 @@ def _make_execution_call(
     return run_forward_and_backward
 
 
-def _measure_latency(
-    measured_call: Callable[[], object],
-    mode: str,
-    num_threads: int,
-    min_run_time: float,
-) -> benchmark.Measurement:
-    with torch.inference_mode(mode=mode == "inference"):
-        return benchmark.Timer(
-            stmt="measured_call()",
-            globals={"measured_call": measured_call},
-            num_threads=num_threads,
-        ).blocked_autorange(min_run_time=min_run_time)
-
-
 def _measure_cuda_memory(
     measured_call: Callable[[], object],
     mode: str,
@@ -201,13 +193,52 @@ def _measure_cuda_memory(
     return torch.cuda.max_memory_allocated(device=device) - baseline
 
 
+def _measure_cpu_memory(
+    args: argparse.Namespace,
+    dtype: torch.dtype,
+    sequence_length: int,
+    mode: str,
+    mechanism: str,
+) -> float:
+    # A direct worker inherits this process's RSS high-water mark through exec.
+    # The lightweight supervisor forks it from a clean process.
+    options = {
+        "--device": "cpu",
+        "--dtype": str(dtype).removeprefix("torch."),
+        "--mode": mode,
+        "--mechanism": mechanism,
+        "--batch-size": str(args.batch_size),
+        "--heads": str(args.heads),
+        "--head-dim": str(args.head_dim),
+        "--sequence-lengths": str(sequence_length),
+        "--num-threads": str(args.num_threads),
+    }
+    command = [
+        sys.executable,
+        "-c",
+        "import subprocess, sys; subprocess.run(args=sys.argv[1:], check=True)",
+        sys.executable,
+        __file__,
+        "--cpu-memory-worker",
+        *chain.from_iterable(options.items()),
+        *(("--causal",) if args.causal else ()),
+    ]
+
+    result = subprocess.run(  # noqa: S603
+        args=command,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return float(result.stdout)
+
+
 def _print_benchmark_setup(
     device: torch.device,
     dtype: torch.dtype,
     is_causal: bool,
     num_threads: int,
 ) -> None:
-
     device_name = (
         torch.cuda.get_device_name(device=device)
         if device.type == "cuda"
@@ -244,20 +275,28 @@ def main(argv: list[str] | None = None) -> None:
         (args.mechanism,) if args.mechanism else tuple(_MECHANISM_LABELS)
     )
 
-    _print_benchmark_setup(
-        device=device,
-        dtype=dtype,
-        is_causal=args.causal,
-        num_threads=args.num_threads,
-    )
+    if args.cpu_memory_worker:
+        torch.set_num_threads(args.num_threads)
+    else:
+        _print_benchmark_setup(
+            device=device,
+            dtype=dtype,
+            is_causal=args.causal,
+            num_threads=args.num_threads,
+        )
 
-    header = (
-        f"{'Mechanism':<20} {'Mode':<10} {'Shape [B,H,L,D]':<20} "
-        f"{'Median (ms)':>12} {'IQR (ms)':>10} "
-        f"{'Peak Allocated Memory Delta (MiB)':>33}"
-    )
-    print(header)
-    print("-" * len(header))
+        memory_header = (
+            "Peak Allocated Memory Delta (MiB)"
+            if device.type == "cuda"
+            else "Peak Process RSS Delta (MiB)"
+        )
+        header = (
+            f"{'Mechanism':<20} {'Mode':<10} {'Shape [B,H,L,D]':<20} "
+            f"{'Median (ms)':>12} {'IQR (ms)':>10} "
+            f"{memory_header:>33}"
+        )
+        print(header)
+        print("-" * len(header))
 
     for sequence_length, mode, mechanism in product(
         args.sequence_lengths,
@@ -300,14 +339,30 @@ def main(argv: list[str] | None = None) -> None:
             value=value,
         )
 
-        latency_measurement = _measure_latency(
-            measured_call=measured_call,
-            mode=mode,
-            num_threads=args.num_threads,
-            min_run_time=args.min_run_time,
-        )
+        if args.cpu_memory_worker:
+            import resource
 
-        memory_label = "-"
+            # Linux resets peak RSS to current RSS when clear_refs receives 5.
+            Path("/proc/self/clear_refs").write_text(
+                data="5",
+                encoding="ascii",
+            )
+            baseline_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            with torch.inference_mode(mode=mode == "inference"):
+                measured_call()
+
+            peak_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            print((peak_rss - baseline_rss) / 1024)
+            return
+
+        with torch.inference_mode(mode=mode == "inference"):
+            latency_measurement = benchmark.Timer(
+                stmt="measured_call()",
+                globals={"measured_call": measured_call},
+                num_threads=args.num_threads,
+            ).blocked_autorange(min_run_time=args.min_run_time)
+
+        memory_label = "unavailable"
         if device.type == "cuda":
             peak_memory = _measure_cuda_memory(
                 measured_call=measured_call,
@@ -315,6 +370,15 @@ def main(argv: list[str] | None = None) -> None:
                 device=device,
             )
             memory_label = f"{peak_memory / 1024**2:.2f}"
+        elif sys.platform == "linux":
+            peak_process_rss = _measure_cpu_memory(
+                args=args,
+                dtype=dtype,
+                sequence_length=sequence_length,
+                mode=mode,
+                mechanism=mechanism,
+            )
+            memory_label = f"{peak_process_rss:.2f}"
 
         shape_label = (
             f"{args.batch_size}x{args.heads}x{sequence_length}x{args.head_dim}"
