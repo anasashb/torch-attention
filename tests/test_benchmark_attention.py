@@ -1,4 +1,6 @@
+import json
 import sys
+from pathlib import Path
 
 import pytest
 import torch
@@ -117,3 +119,54 @@ def test_cuda_memory_measurement(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert peak_memory == 80
     assert calls == 1
+
+
+def test_json_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks machine-readable benchmark output."""
+    monkeypatch.setattr(
+        "benchmarks.benchmark_attention._measure_cpu_memory",
+        lambda **_: 1.5,
+    )
+    output = tmp_path / "benchmark.json"
+
+    main(
+        argv=[
+            "--device",
+            "cpu",
+            "--dtype",
+            "float32",
+            "--mechanism",
+            "sdpa-auto",
+            "--mode",
+            "inference",
+            "--batch-size",
+            "1",
+            "--heads",
+            "1",
+            "--head-dim",
+            "2",
+            "--sequence-lengths",
+            "2",
+            "--min-run-time",
+            "0.001",
+            "--output",
+            str(output),
+        ]
+    )
+
+    result = json.loads(output.read_text(encoding="utf-8"))
+    case = result["results"][0]
+
+    assert result["schema_version"] == 1
+    assert result["environment"]["device"] == "cpu"
+    assert case["mechanism"] == "sdpa-auto"
+    assert case["shape"] == [1, 1, 2, 2]
+    assert case["latency"]["median_seconds"] > 0
+    assert case["latency"]["iqr_seconds"] >= 0
+    assert case["memory"] == {
+        "metric": "peak_process_rss_delta",
+        "value_mib": 1.5,
+    }
