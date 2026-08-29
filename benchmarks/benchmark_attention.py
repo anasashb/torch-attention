@@ -8,6 +8,7 @@ import sys
 from collections.abc import Callable
 from itertools import chain, product
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -28,7 +29,9 @@ _MECHANISM_LABELS = {
     "adlers-einsum": "ADLERS einsum",
     "adlers-probsparse": "ADLERS ProbSparse",
 }
+_SCHEMA_VERSION = 1
 _SEED = 66
+_JsonObject = dict[str, Any]
 
 
 def _positive_int(value: str) -> int:
@@ -99,6 +102,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--output",
         type=Path,
         help="Write benchmark results to this JSON file.",
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="Compare results with this JSON benchmark run.",
     )
     parser.add_argument(
         "--cpu-memory-worker",
@@ -257,12 +265,113 @@ def _print_benchmark_setup(
     print()
 
 
+def _case_key(result: _JsonObject) -> tuple[object, ...]:
+    return (
+        result["mechanism"],
+        result["mode"],
+        tuple(result["shape"]),
+        result["dtype"],
+        result["device"],
+        result["causal"],
+    )
+
+
+def _load_baseline_cases(
+    path: Path,
+    environment: _JsonObject,
+    settings: _JsonObject,
+    expected_cases: set[tuple[object, ...]],
+    memory_metric: str,
+) -> dict[tuple[object, ...], _JsonObject]:
+    baseline: _JsonObject = json.loads(path.read_text(encoding="utf-8"))
+    if baseline.get("schema_version") != _SCHEMA_VERSION:
+        raise ValueError(
+            "baseline schema is incompatible; regenerate it with this script"
+        )
+
+    if baseline.get("environment") != environment:
+        raise ValueError(
+            "baseline environment differs; rerun both revisions with the "
+            "same Python, PyTorch, CUDA, device, and CPU thread count"
+        )
+
+    if baseline.get("settings") != settings:
+        raise ValueError(
+            "baseline settings differ; use the same minimum runtime and seed"
+        )
+
+    results: list[_JsonObject] = baseline["results"]
+    cases = {_case_key(result): result for result in results}
+
+    if len(cases) != len(results) or cases.keys() != expected_cases:
+        raise ValueError(
+            "baseline cases differ; use identical mechanisms, modes, shapes, "
+            "dtype, device, and causal setting"
+        )
+
+    if any(result["memory"]["metric"] != memory_metric for result in results):
+        raise ValueError("baseline memory metric differs from current run")
+
+    return cases
+
+
+def _print_baseline_comparison(
+    results: list[_JsonObject],
+    baseline_cases: dict[tuple[object, ...], _JsonObject],
+) -> None:
+
+    print("\nBaseline comparison (negative is better)")
+    header = (
+        f"{'Mechanism':<20} {'Mode':<10} {'Shape [B,H,L,D]':<20} "
+        f"{'Latency Delta (ms)':>18} {'Latency Delta (%)':>18} "
+        f"{'Memory Delta (MiB)':>20} {'Memory Delta (%)':>18}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    for result in results:
+        baseline = baseline_cases[_case_key(result)]
+        shape_label = "x".join(str(dimension) for dimension in result["shape"])
+
+        current_latency = result["latency"]["median_seconds"]
+        baseline_latency = baseline["latency"]["median_seconds"]
+
+        latency_delta_ms = (
+            f"{(current_latency - baseline_latency) * 1_000:+.4f}"
+        )
+        latency_delta_percent = (
+            f"{(current_latency / baseline_latency - 1) * 100:+.2f}"
+        )
+
+        current_memory = result["memory"]["value_mib"]
+        baseline_memory = baseline["memory"]["value_mib"]
+
+        memory_delta_mib = (
+            "unavailable"
+            if current_memory is None or baseline_memory is None
+            else f"{current_memory - baseline_memory:+.2f}"
+        )
+        memory_delta_percent = (
+            "unavailable"
+            if current_memory is None or not baseline_memory
+            else f"{(current_memory / baseline_memory - 1) * 100:+.2f}"
+        )
+
+        print(
+            f"{_MECHANISM_LABELS[result['mechanism']]:<20} "
+            f"{result['mode']:<10} {shape_label:<20} "
+            f"{latency_delta_ms:>18} {latency_delta_percent:>18} "
+            f"{memory_delta_mib:>20} {memory_delta_percent:>18}"
+        )
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run the attention benchmark."""
 
     args = _parse_args(argv=argv)
     device: torch.device = args.device
     output: Path | None = args.output
+    baseline_path: Path | None = args.baseline
     dtype = _DTYPES.get(args.dtype) or (
         torch.float16 if device.type == "cuda" else torch.float32
     )
@@ -272,6 +381,18 @@ def main(argv: list[str] | None = None) -> None:
         if device.type == "cuda"
         else f"CPU ({platform.machine()})"
     )
+    environment: _JsonObject = {
+        "python_version": platform.python_version(),
+        "pytorch_version": str(torch.__version__),
+        "cuda_version": torch.version.cuda,
+        "device": str(device),
+        "device_name": device_name,
+        "cpu_threads": args.num_threads,
+    }
+    settings: _JsonObject = {
+        "minimum_run_time_seconds": args.min_run_time,
+        "seed": _SEED,
+    }
 
     if device.type == "cuda" and device.index is not None:
         # needed for torch.utils.benchmark.Timer
@@ -282,6 +403,42 @@ def main(argv: list[str] | None = None) -> None:
     mechanisms = (
         (args.mechanism,) if args.mechanism else tuple(_MECHANISM_LABELS)
     )
+    cases = tuple(product(args.sequence_lengths, modes, mechanisms))
+    memory_header, memory_metric = (
+        (
+            "Peak Allocated Memory Delta (MiB)",
+            "peak_allocated_memory_delta",
+        )
+        if device.type == "cuda"
+        else ("Peak Process RSS Delta (MiB)", "peak_process_rss_delta")
+    )
+
+    baseline_cases: dict[tuple[object, ...], _JsonObject] | None = None
+    if baseline_path is not None:
+        expected_cases: set[tuple[object, ...]] = {
+            (
+                mechanism,
+                mode,
+                (
+                    args.batch_size,
+                    args.heads,
+                    sequence_length,
+                    args.head_dim,
+                ),
+                dtype_name,
+                str(device),
+                args.causal,
+            )
+            for sequence_length, mode, mechanism in cases
+        }
+
+        baseline_cases = _load_baseline_cases(
+            path=baseline_path,
+            environment=environment,
+            settings=settings,
+            expected_cases=expected_cases,
+            memory_metric=memory_metric,
+        )
 
     if args.cpu_memory_worker:
         torch.set_num_threads(args.num_threads)
@@ -294,16 +451,6 @@ def main(argv: list[str] | None = None) -> None:
             num_threads=args.num_threads,
         )
 
-        memory_header = (
-            "Peak Allocated Memory Delta (MiB)"
-            if device.type == "cuda"
-            else "Peak Process RSS Delta (MiB)"
-        )
-        memory_metric = (
-            "peak_allocated_memory_delta"
-            if device.type == "cuda"
-            else "peak_process_rss_delta"
-        )
         header = (
             f"{'Mechanism':<20} {'Mode':<10} {'Shape [B,H,L,D]':<20} "
             f"{'Median (ms)':>12} {'IQR (ms)':>10} "
@@ -312,13 +459,9 @@ def main(argv: list[str] | None = None) -> None:
         print(header)
         print("-" * len(header))
 
-    results: list[dict[str, object]] = []
+    results: list[_JsonObject] = []
 
-    for sequence_length, mode, mechanism in product(
-        args.sequence_lengths,
-        modes,
-        mechanisms,
-    ):
+    for sequence_length, mode, mechanism in cases:
         training = mode == "training"
         shape = (
             args.batch_size,
@@ -326,6 +469,7 @@ def main(argv: list[str] | None = None) -> None:
             sequence_length,
             args.head_dim,
         )
+
         generator = torch.Generator(device=device).manual_seed(_SEED)
         query, key, value = (
             torch.randn(
@@ -359,10 +503,7 @@ def main(argv: list[str] | None = None) -> None:
             import resource
 
             # Linux resets peak RSS to current RSS when clear_refs receives 5.
-            Path("/proc/self/clear_refs").write_text(
-                data="5",
-                encoding="ascii",
-            )
+            Path("/proc/self/clear_refs").write_text(data="5", encoding="ascii")
             baseline_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             with torch.inference_mode(mode=mode == "inference"):
                 measured_call()
@@ -379,6 +520,7 @@ def main(argv: list[str] | None = None) -> None:
             ).blocked_autorange(min_run_time=args.min_run_time)
 
         memory_mib = None
+
         if device.type == "cuda":
             peak_memory = _measure_cuda_memory(
                 measured_call=measured_call,
@@ -386,6 +528,7 @@ def main(argv: list[str] | None = None) -> None:
                 device=device,
             )
             memory_mib = peak_memory / 1024**2
+
         elif sys.platform == "linux":
             memory_mib = _measure_cpu_memory(
                 args=args,
@@ -430,28 +573,21 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     if output is not None:
+        payload = {
+            "schema_version": _SCHEMA_VERSION,
+            "environment": environment,
+            "settings": settings,
+            "results": results,
+        }
         output.write_text(
-            data=json.dumps(
-                {
-                    "schema_version": 1,
-                    "environment": {
-                        "python_version": platform.python_version(),
-                        "pytorch_version": str(torch.__version__),
-                        "cuda_version": torch.version.cuda,
-                        "device": str(device),
-                        "device_name": device_name,
-                        "cpu_threads": args.num_threads,
-                    },
-                    "settings": {
-                        "minimum_run_time_seconds": args.min_run_time,
-                        "seed": _SEED,
-                    },
-                    "results": results,
-                },
-                indent=2,
-            )
-            + "\n",
+            data=json.dumps(payload, indent=2) + "\n",
             encoding="utf-8",
+        )
+
+    if baseline_cases is not None:
+        _print_baseline_comparison(
+            results=results,
+            baseline_cases=baseline_cases,
         )
 
 
