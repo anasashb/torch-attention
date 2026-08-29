@@ -208,7 +208,11 @@ def _measure_cuda_memory(
 
 
 def _measure_cpu_memory(
-    args: argparse.Namespace,
+    batch_size: int,
+    heads: int,
+    head_dim: int,
+    num_threads: int,
+    is_causal: bool,
     dtype: torch.dtype,
     sequence_length: int,
     mode: str,
@@ -221,11 +225,11 @@ def _measure_cpu_memory(
         "--dtype": str(dtype).removeprefix("torch."),
         "--mode": mode,
         "--mechanism": mechanism,
-        "--batch-size": str(args.batch_size),
-        "--heads": str(args.heads),
-        "--head-dim": str(args.head_dim),
+        "--batch-size": str(batch_size),
+        "--heads": str(heads),
+        "--head-dim": str(head_dim),
         "--sequence-lengths": str(sequence_length),
-        "--num-threads": str(args.num_threads),
+        "--num-threads": str(num_threads),
     }
     command = [
         sys.executable,
@@ -235,7 +239,7 @@ def _measure_cpu_memory(
         __file__,
         "--cpu-memory-worker",
         *chain.from_iterable(options.items()),
-        *(("--causal",) if args.causal else ()),
+        *(("--causal",) if is_causal else ()),
     ]
 
     result = subprocess.run(  # noqa: S603
@@ -369,28 +373,44 @@ def main(argv: list[str] | None = None) -> None:
     """Run the attention benchmark."""
 
     args = _parse_args(argv=argv)
+    selected_mechanism: str | None = args.mechanism
+    selected_mode: str = args.mode
     device: torch.device = args.device
+    selected_dtype: str | None = args.dtype
+    is_causal: bool = args.causal
+    batch_size: int = args.batch_size
+    heads: int = args.heads
+    head_dim: int = args.head_dim
+    sequence_lengths: list[int] = args.sequence_lengths
+    num_threads: int = args.num_threads
+    min_run_time: float = args.min_run_time
     output: Path | None = args.output
     baseline_path: Path | None = args.baseline
-    dtype = _DTYPES.get(args.dtype) or (
-        torch.float16 if device.type == "cuda" else torch.float32
+    cpu_memory_worker: bool = args.cpu_memory_worker
+
+    default_dtype = torch.float16 if device.type == "cuda" else torch.float32
+    dtype = (
+        _DTYPES[selected_dtype] if selected_dtype is not None else default_dtype
     )
+
     dtype_name = str(dtype).removeprefix("torch.")
     device_name = (
         torch.cuda.get_device_name(device=device)
         if device.type == "cuda"
         else f"CPU ({platform.machine()})"
     )
+
     environment: _JsonObject = {
         "python_version": platform.python_version(),
         "pytorch_version": str(torch.__version__),
         "cuda_version": torch.version.cuda,
         "device": str(device),
         "device_name": device_name,
-        "cpu_threads": args.num_threads,
+        "cpu_threads": num_threads,
     }
+
     settings: _JsonObject = {
-        "minimum_run_time_seconds": args.min_run_time,
+        "minimum_run_time_seconds": min_run_time,
         "seed": _SEED,
     }
 
@@ -399,11 +419,20 @@ def main(argv: list[str] | None = None) -> None:
         # if --device arg has index, and its not cuda:0
         torch.cuda.set_device(device=device)
 
-    modes = ("inference", "training") if args.mode == "all" else (args.mode,)
-    mechanisms = (
-        (args.mechanism,) if args.mechanism else tuple(_MECHANISM_LABELS)
+    modes = (
+        ("inference", "training")
+        if selected_mode == "all"
+        else (selected_mode,)
     )
-    cases = tuple(product(args.sequence_lengths, modes, mechanisms))
+
+    mechanisms = (
+        (selected_mechanism,)
+        if selected_mechanism
+        else tuple(_MECHANISM_LABELS)
+    )
+
+    cases = tuple(product(sequence_lengths, modes, mechanisms))
+
     memory_header, memory_metric = (
         (
             "Peak Allocated Memory Delta (MiB)",
@@ -420,14 +449,14 @@ def main(argv: list[str] | None = None) -> None:
                 mechanism,
                 mode,
                 (
-                    args.batch_size,
-                    args.heads,
+                    batch_size,
+                    heads,
                     sequence_length,
-                    args.head_dim,
+                    head_dim,
                 ),
                 dtype_name,
                 str(device),
-                args.causal,
+                is_causal,
             )
             for sequence_length, mode, mechanism in cases
         }
@@ -440,15 +469,15 @@ def main(argv: list[str] | None = None) -> None:
             memory_metric=memory_metric,
         )
 
-    if args.cpu_memory_worker:
-        torch.set_num_threads(args.num_threads)
+    if cpu_memory_worker:
+        torch.set_num_threads(num_threads)
     else:
         _print_benchmark_setup(
             device=device,
             device_name=device_name,
             dtype=dtype,
-            is_causal=args.causal,
-            num_threads=args.num_threads,
+            is_causal=is_causal,
+            num_threads=num_threads,
         )
 
         header = (
@@ -464,10 +493,10 @@ def main(argv: list[str] | None = None) -> None:
     for sequence_length, mode, mechanism in cases:
         training = mode == "training"
         shape = (
-            args.batch_size,
-            args.heads,
+            batch_size,
+            heads,
             sequence_length,
-            args.head_dim,
+            head_dim,
         )
 
         generator = torch.Generator(device=device).manual_seed(_SEED)
@@ -487,7 +516,7 @@ def main(argv: list[str] | None = None) -> None:
             query=query,
             key=key,
             value=value,
-            is_causal=args.causal,
+            is_causal=is_causal,
             training=training,
         )
 
@@ -499,7 +528,7 @@ def main(argv: list[str] | None = None) -> None:
             value=value,
         )
 
-        if args.cpu_memory_worker:
+        if cpu_memory_worker:
             import resource
 
             # Linux resets peak RSS to current RSS when clear_refs receives 5.
@@ -516,8 +545,8 @@ def main(argv: list[str] | None = None) -> None:
             latency_measurement = benchmark.Timer(
                 stmt="measured_call()",
                 globals={"measured_call": measured_call},
-                num_threads=args.num_threads,
-            ).blocked_autorange(min_run_time=args.min_run_time)
+                num_threads=num_threads,
+            ).blocked_autorange(min_run_time=min_run_time)
 
         memory_mib = None
 
@@ -531,7 +560,11 @@ def main(argv: list[str] | None = None) -> None:
 
         elif sys.platform == "linux":
             memory_mib = _measure_cpu_memory(
-                args=args,
+                batch_size=batch_size,
+                heads=heads,
+                head_dim=head_dim,
+                num_threads=num_threads,
+                is_causal=is_causal,
                 dtype=dtype,
                 sequence_length=sequence_length,
                 mode=mode,
@@ -542,9 +575,7 @@ def main(argv: list[str] | None = None) -> None:
             "unavailable" if memory_mib is None else f"{memory_mib:.2f}"
         )
 
-        shape_label = (
-            f"{args.batch_size}x{args.heads}x{sequence_length}x{args.head_dim}"
-        )
+        shape_label = f"{batch_size}x{heads}x{sequence_length}x{head_dim}"
         print(
             f"{_MECHANISM_LABELS[mechanism]:<20} "
             f"{mode:<10} {shape_label:<20} "
@@ -560,7 +591,7 @@ def main(argv: list[str] | None = None) -> None:
                 "shape": list(shape),
                 "dtype": dtype_name,
                 "device": str(device),
-                "causal": args.causal,
+                "causal": is_causal,
                 "latency": {
                     "median_seconds": latency_measurement.median,
                     "iqr_seconds": latency_measurement.iqr,
