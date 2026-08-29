@@ -170,3 +170,62 @@ def test_json_output(
         "metric": "peak_process_rss_delta",
         "value_mib": 1.5,
     }
+
+
+def test_baseline_comparison(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks compatible comparison and environment validation."""
+    arguments = [
+        "--device",
+        "cpu",
+        "--dtype",
+        "float32",
+        "--mechanism",
+        "sdpa-auto",
+        "--mode",
+        "inference",
+        "--batch-size",
+        "1",
+        "--heads",
+        "1",
+        "--head-dim",
+        "2",
+        "--sequence-lengths",
+        "2",
+        "--min-run-time",
+        "0.001",
+    ]
+    baseline = tmp_path / "baseline.json"
+    monkeypatch.setattr(
+        "benchmarks.benchmark_attention._measure_cpu_memory",
+        lambda **_: 2.0,
+    )
+    main(argv=[*arguments, "--output", str(baseline)])
+    capsys.readouterr()
+
+    monkeypatch.setattr(
+        "benchmarks.benchmark_attention._measure_cpu_memory",
+        lambda **_: 1.0,
+    )
+    main(argv=[*arguments, "--baseline", str(baseline)])
+    output = capsys.readouterr().out
+
+    assert "Baseline comparison (negative is better)" in output
+    assert "Latency Delta (ms)" in output
+    assert "Latency Delta (%)" in output
+    assert "Memory Delta (MiB)" in output
+    assert "Memory Delta (%)" in output
+    assert "-1.00" in output
+    assert "-50.00" in output
+
+    baseline_result = json.loads(baseline.read_text(encoding="utf-8"))
+    baseline_result["environment"]["device_name"] = "different CPU"
+    baseline.write_text(
+        data=json.dumps(baseline_result),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="baseline environment differs"):
+        main(argv=[*arguments, "--baseline", str(baseline)])
