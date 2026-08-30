@@ -65,6 +65,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"benchmarks/*" = ["T20"]
 "tests/*" = ["S101", "T20", "C90"]
 
 [format]
