@@ -41,3 +41,25 @@ jobs:
           uv run --no-sync isort --check --diff .
           uv run --no-sync black --check --diff --color .
           uv run --no-sync ruff check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ${{ env.PYTHON_VERSION_FILE }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --no-default-groups --group test --group torch-cpu --frozen
+
+      - name: Run mypy
+        run: uv run --no-sync mypy .
