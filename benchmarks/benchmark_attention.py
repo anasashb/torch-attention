@@ -595,6 +595,7 @@ def main(argv: list[str] | None = None) -> None:
                 "latency": {
                     "median_seconds": latency_measurement.median,
                     "iqr_seconds": latency_measurement.iqr,
+                    "samples_seconds": latency_measurement.times,
                 },
                 "memory": {
                     "metric": memory_metric,
