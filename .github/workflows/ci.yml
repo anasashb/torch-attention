@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.9.26"  # matching the uv_build floor in pyproject.toml
+  PYTHON_VERSION_FILE: ".python-version"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: ${{ env.PYTHON_VERSION_FILE }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install test dependencies
+        run: uv sync --only-group test --no-install-project --frozen
+
+      - name: Run ruff/black/isort
+        run: |
+          uv run --no-sync isort --check --diff .
+          uv run --no-sync black --check --diff --color .
+          uv run --no-sync ruff check .
