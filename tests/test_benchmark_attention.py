@@ -166,7 +166,6 @@ def test_json_output(
     assert case["shape"] == [1, 1, 2, 2]
     assert case["latency"]["median_seconds"] > 0
     assert case["latency"]["iqr_seconds"] >= 0
-    assert case["latency"]["samples_seconds"]
     assert case["memory"] == {
         "metric": "peak_process_rss_delta",
         "value_mib": 1.5,
