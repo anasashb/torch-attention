@@ -15,8 +15,13 @@
 import torch
 from torch.nn import Module
 
-from ..attention_registry import AttentionRegistry, Optional, Callable, Int, \
-    EventDispatcherInstance
+from ..attention_registry import (
+    AttentionRegistry,
+    Optional,
+    Callable,
+    Int,
+    EventDispatcherInstance,
+)
 from ..events import EventDispatcher
 from ..feature_maps import elu_feature_map
 
@@ -48,18 +53,22 @@ class LinearAttention(Module):
                           module for dispatching events (default: the default
                           global dispatcher)
     """
-    def __init__(self, query_dimensions, feature_map=None, eps=1e-6,
-                 event_dispatcher=""):
+
+    def __init__(
+        self, query_dimensions, feature_map=None, eps=1e-6, event_dispatcher=""
+    ):
         super(LinearAttention, self).__init__()
         self.feature_map = (
-            feature_map(query_dimensions) if feature_map else
-            elu_feature_map(query_dimensions)
+            feature_map(query_dimensions)
+            if feature_map
+            else elu_feature_map(query_dimensions)
         )
         self.eps = eps
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
-    def forward(self, queries, keys, values, attn_mask, query_lengths,
-                key_lengths):
+    def forward(
+        self, queries, keys, values, attn_mask, query_lengths, key_lengths
+    ):
         # Apply the feature map to the queries and keys
         self.feature_map.new_feature_map(queries.device)
         Q = self.feature_map.forward_queries(queries)
@@ -68,8 +77,12 @@ class LinearAttention(Module):
         # Apply the key padding mask and make sure that the attn_mask is
         # all_ones
         if not attn_mask.all_ones:
-            raise RuntimeError(("LinearAttention does not support arbitrary "
-                                "attention masks"))
+            raise RuntimeError(
+                (
+                    "LinearAttention does not support arbitrary "
+                    "attention masks"
+                )
+            )
         K = K * key_lengths.float_matrix[:, :, None, None]
 
         # Compute the KV matrix, namely the dot product of keys and values so
@@ -78,7 +91,7 @@ class LinearAttention(Module):
         KV = torch.einsum("nshd,nshm->nhmd", K, values)
 
         # Compute the normalizer
-        Z = 1/(torch.einsum("nlhd,nhd->nlh", Q, K.sum(dim=1))+self.eps)
+        Z = 1 / (torch.einsum("nlhd,nhd->nlh", Q, K.sum(dim=1)) + self.eps)
 
         # Finally compute and return the new values
         V = torch.einsum("nlhd,nhmd,nlh->nlhm", Q, KV, Z)
@@ -89,10 +102,11 @@ class LinearAttention(Module):
 # Register the attention implementation so that it becomes available in our
 # builders
 AttentionRegistry.register(
-    "linear", LinearAttention,
+    "linear",
+    LinearAttention,
     [
         ("query_dimensions", Int),
         ("feature_map", Optional(Callable)),
-        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
-    ]
+        ("event_dispatcher", Optional(EventDispatcherInstance, "")),
+    ],
 )
