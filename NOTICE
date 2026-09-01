@@ -12,5 +12,17 @@ src/adlers/time_series/prob_sparse.py
 Informer2020 is licensed under the Apache License, Version 2.0.
 See LICENSES/Apache-2.0.txt.
 
+This project also includes software adapted from fast-transformers:
+https://github.com/idiap/fast-transformers
+
+Source revision:
+2ad36b97e64cb93862937bd21fcc9568d989561f
+
+The adapted code is located in:
+src/adlers/nlp/linear_attention.py
+
+fast-transformers is licensed under the MIT License.
+See LICENSES/fast-transformers-MIT.txt.
+
 Except for files that state otherwise, ADLERS is licensed under the MIT
 License. See LICENSE.
