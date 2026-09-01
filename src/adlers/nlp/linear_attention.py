@@ -57,7 +57,7 @@ class LinearAttention(Module):
     def __init__(
         self, query_dimensions, feature_map=None, eps=1e-6, event_dispatcher=""
     ):
-        super(LinearAttention, self).__init__()
+        super().__init__()
         self.feature_map = (
             feature_map(query_dimensions)
             if feature_map
@@ -78,10 +78,7 @@ class LinearAttention(Module):
         # all_ones
         if not attn_mask.all_ones:
             raise RuntimeError(
-                (
-                    "LinearAttention does not support arbitrary "
-                    "attention masks"
-                )
+                "LinearAttention does not support arbitrary " "attention masks"
             )
         K = K * key_lengths.float_matrix[:, :, None, None]
 
