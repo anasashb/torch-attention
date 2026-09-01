@@ -17,10 +17,10 @@ from torch.nn import Module
 
 from ..attention_registry import (
     AttentionRegistry,
-    Optional,
     Callable,
-    Int,
     EventDispatcherInstance,
+    Int,
+    Optional,
 )
 from ..events import EventDispatcher
 from ..feature_maps import elu_feature_map
