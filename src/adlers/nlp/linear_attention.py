@@ -15,7 +15,7 @@
 import torch
 from torch.nn import Module
 
-from ..feature_maps import elu_feature_map
+from ._feature_maps import elu_feature_map
 
 
 class LinearAttention(Module):
