@@ -65,7 +65,7 @@ class LinearAttention(Module):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> Tensor:
+    ) -> tuple[Tensor, None]:
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
@@ -114,4 +114,4 @@ class LinearAttention(Module):
             normalization_factor,
         )
 
-        return attn_output.contiguous()
+        return attn_output.contiguous(), None
