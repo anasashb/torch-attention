@@ -78,3 +78,14 @@ def test_linear_attention_rejects_query_dependent_attention_masks() -> None:
         "Linear attention only supports key-padding masks shaped "
         "[batch_size, 1, 1, num_keys]; got shape (2, 2)."
     )
+
+
+def test_linear_attention_rejects_attention_scores() -> None:
+    """Checks that LinearAttention rejects attention score output."""
+    with pytest.raises(ValueError) as error:
+        LinearAttention(output_attention_scores=True)
+
+    assert str(error.value) == (
+        "Linear attention does not support returning attention scores. "
+        "Set output_attention_scores=False."
+    )
