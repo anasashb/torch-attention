@@ -46,14 +46,16 @@ class LinearAttention(Module):
              denominator (default: 1e-6)
     """
 
-    def __init__(self, query_dimensions, feature_map=None, eps=1e-6):
+    def __init__(self, query_dimensions, feature_map=None, eps=1e-6) -> None:
         super().__init__()
         self.feature_map = (
             feature_map(query_dimensions) if feature_map else _elu_feature_map
         )
         self.eps = eps
 
-    def forward(self, query, key, value, attn_mask, query_lengths, key_lengths):
+    def forward(
+        self, query, key, value, attn_mask, query_lengths, key_lengths
+    ) -> Tensor:
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
