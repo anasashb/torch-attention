@@ -12,6 +12,7 @@
 
 """Implement unmasked linear attention."""
 
+from collections.abc import Callable
 from typing import Any
 
 import torch
@@ -48,19 +49,18 @@ class LinearAttention(Module):
              denominator (default: 1e-6)
     """
 
-    # Any preserves temporary fast-transformers types until API adaptation.
     def __init__(
         self,
-        query_dimensions: int,
-        feature_map: Any | None = None,
+        feature_map: Callable[[Tensor], Tensor] | None = None,
         eps: float = 1e-6,
     ) -> None:
         super().__init__()
         self.feature_map = (
-            feature_map(query_dimensions) if feature_map else _elu_feature_map
+            feature_map if feature_map is not None else _elu_feature_map
         )
         self.eps = eps
 
+    # Any preserves temporary fast-transformers types until API adaptation.
     def forward(
         self,
         query: Tensor,
