@@ -89,3 +89,14 @@ def test_linear_attention_rejects_attention_scores() -> None:
         "Linear attention does not support returning attention scores. "
         "Set output_attention_scores=False."
     )
+
+
+def test_linear_attention_rejects_nonzero_dropout_rate() -> None:
+    """Checks that unsupported LinearAttention dropout is rejected."""
+    with pytest.raises(ValueError) as error:
+        LinearAttention(dropout_rate=0.1)
+
+    assert str(error.value) == (
+        "Linear attention does not support dropout; got dropout_rate 0.1. "
+        "Set dropout_rate=0.0."
+    )
