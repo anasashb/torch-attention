@@ -80,13 +80,13 @@ class LinearAttention(Module):
             raise RuntimeError(
                 "LinearAttention does not support arbitrary attention masks"
             )
-        mapped_key = mapped_key * key_lengths.float_matrix[:, :, None, None]
+        mapped_key = mapped_key * key_lengths.float_matrix[:, None, :, None]
 
         # Compute the KV matrix, namely the dot product of keys and values so
         # that we never explicitly compute the attention matrix and thus
         # decrease the complexity
         key_value_product = torch.einsum(
-            "nshd,nshm->nhmd",
+            "bhsd,bhsm->bhmd",
             mapped_key,
             value,
         )
@@ -94,16 +94,16 @@ class LinearAttention(Module):
         # Compute the normalizer
         normalization_factor = 1 / (
             torch.einsum(
-                "nlhd,nhd->nlh",
+                "bhld,bhd->bhl",
                 mapped_query,
-                mapped_key.sum(dim=1),
+                mapped_key.sum(dim=-2),
             )
             + self.eps
         )
 
         # Finally compute and return the new values
         attn_output = torch.einsum(
-            "nlhd,nhmd,nlh->nlhm",
+            "bhld,bhmd,bhl->bhlm",
             mapped_query,
             key_value_product,
             normalization_factor,
