@@ -12,6 +12,8 @@
 
 """Implement unmasked linear attention."""
 
+from typing import Any
+
 import torch
 from torch import Tensor
 from torch.nn import Module
@@ -46,7 +48,13 @@ class LinearAttention(Module):
              denominator (default: 1e-6)
     """
 
-    def __init__(self, query_dimensions, feature_map=None, eps=1e-6) -> None:
+    # Any preserves temporary fast-transformers types until API adaptation.
+    def __init__(
+        self,
+        query_dimensions: int,
+        feature_map: Any | None = None,
+        eps: float = 1e-6,
+    ) -> None:
         super().__init__()
         self.feature_map = (
             feature_map(query_dimensions) if feature_map else _elu_feature_map
@@ -54,7 +62,13 @@ class LinearAttention(Module):
         self.eps = eps
 
     def forward(
-        self, query, key, value, attn_mask, query_lengths, key_lengths
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Any,
+        query_lengths: Any,
+        key_lengths: Any,
     ) -> Tensor:
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
