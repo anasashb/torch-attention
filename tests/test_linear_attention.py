@@ -7,9 +7,9 @@ from adlers.nlp.linear_attention import LinearAttention
 
 def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     """Checks the pinned fast-transformers unmasked attention output."""
-    query = torch.tensor([[[[1.0, -1.0]], [[-1.0, 1.0]]]]).repeat(1, 1, 3, 1)
-    key = torch.tensor([[[[1.0, 0.0]], [[0.0, 1.0]]]]).repeat(1, 1, 3, 1)
-    value = torch.tensor([[[[1.0, 2.0]], [[3.0, 4.0]]]]).repeat(1, 1, 3, 1)
+    query = torch.tensor([[[[1.0, -1.0], [-1.0, 1.0]]]]).repeat(1, 3, 1, 1)
+    key = torch.tensor([[[[1.0, 0.0], [0.0, 1.0]]]]).repeat(1, 3, 1, 1)
+    value = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]]).repeat(1, 3, 1, 1)
     attn_mask = SimpleNamespace(all_ones=True)
     key_lengths = SimpleNamespace(float_matrix=torch.ones((1, 2)))
     attention = LinearAttention(eps=1e-6)
@@ -24,29 +24,16 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     )
 
     expected_output = torch.tensor(
-        [
-            [
-                [
-                    [1.77024138, 2.77024126],
-                    [1.77024138, 2.77024126],
-                    [1.77024138, 2.77024126],
-                ],
-                [
-                    [2.22975802, 3.22975779],
-                    [2.22975802, 3.22975779],
-                    [2.22975802, 3.22975779],
-                ],
-            ]
-        ]
-    )
+        [[[[1.77024138, 2.77024126], [2.22975802, 3.22975779]]]]
+    ).repeat(1, 3, 1, 1)
     torch.testing.assert_close(output, expected_output)
 
 
 def test_linear_attention_accepts_tensor_feature_map() -> None:
     """Checks that feature maps operate directly on tensors."""
-    query = torch.zeros((1, 2, 1, 1))
-    key = torch.zeros((1, 2, 1, 1))
-    value = torch.tensor([[[[2.0]], [[4.0]]]])
+    query = torch.zeros((1, 1, 2, 1))
+    key = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
     attn_mask = SimpleNamespace(all_ones=True)
     key_lengths = SimpleNamespace(float_matrix=torch.ones((1, 2)))
     attention = LinearAttention(feature_map=torch.ones_like, eps=0.0)
