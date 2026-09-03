@@ -13,7 +13,6 @@
 """Implement unmasked linear attention."""
 
 from collections.abc import Callable
-from typing import Any
 
 import torch
 from torch import Tensor
@@ -60,27 +59,33 @@ class LinearAttention(Module):
         )
         self.eps = eps
 
-    # Any preserves temporary fast-transformers types until API adaptation.
     def forward(
         self,
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        attn_mask: Any,
-        query_lengths: Any,
-        key_lengths: Any,
+        attn_mask: Tensor | None = None,
     ) -> Tensor:
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
 
-        # Apply the key padding mask and make sure that the attn_mask is
-        # all_ones
-        if not attn_mask.all_ones:
-            raise RuntimeError(
-                "LinearAttention does not support arbitrary attention masks"
+        if attn_mask is not None:
+            expected_mask_shape = (
+                query.shape[0],
+                1,
+                1,
+                key.shape[-2],
             )
-        mapped_key = mapped_key * key_lengths.float_matrix[:, None, :, None]
+            if attn_mask.shape != expected_mask_shape:
+                raise ValueError(
+                    "Linear attention only supports key-padding masks shaped "
+                    "[batch_size, 1, 1, num_keys]; "
+                    f"got shape {tuple(attn_mask.shape)}."
+                )
+
+            key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
+            mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
         # Compute the KV matrix, namely the dot product of keys and values so
         # that we never explicitly compute the attention matrix and thus
