@@ -12,7 +12,7 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     value = torch.tensor([[[[1.0, 2.0]], [[3.0, 4.0]]]]).repeat(1, 1, 3, 1)
     attn_mask = SimpleNamespace(all_ones=True)
     key_lengths = SimpleNamespace(float_matrix=torch.ones((1, 2)))
-    attention = LinearAttention(query_dimensions=2, eps=1e-6)
+    attention = LinearAttention(eps=1e-6)
 
     output = attention(
         query=query,
