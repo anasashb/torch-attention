@@ -52,7 +52,14 @@ class LinearAttention(Module):
         self,
         feature_map: Callable[[Tensor], Tensor] | None = None,
         eps: float = 1e-6,
+        output_attention_scores: bool = False,
     ) -> None:
+        if output_attention_scores:
+            raise ValueError(
+                "Linear attention does not support returning attention scores. "
+                "Set output_attention_scores=False."
+            )
+
         super().__init__()
         self.feature_map = (
             feature_map if feature_map is not None else _elu_feature_map
