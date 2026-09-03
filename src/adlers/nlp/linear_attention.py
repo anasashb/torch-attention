@@ -52,8 +52,15 @@ class LinearAttention(Module):
         self,
         feature_map: Callable[[Tensor], Tensor] | None = None,
         eps: float = 1e-6,
+        dropout_rate: float = 0.0,
         output_attention_scores: bool = False,
     ) -> None:
+        if dropout_rate != 0.0:
+            raise ValueError(
+                "Linear attention does not support dropout; "
+                f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
+            )
+
         if output_attention_scores:
             raise ValueError(
                 "Linear attention does not support returning attention scores. "
