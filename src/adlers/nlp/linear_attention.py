@@ -61,7 +61,7 @@ class LinearAttention(Module):
         # all_ones
         if not attn_mask.all_ones:
             raise RuntimeError(
-                "LinearAttention does not support arbitrary " "attention masks"
+                "LinearAttention does not support arbitrary attention masks"
             )
         mapped_key = mapped_key * key_lengths.float_matrix[:, :, None, None]
 
