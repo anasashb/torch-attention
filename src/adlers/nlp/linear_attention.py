@@ -52,12 +52,10 @@ class LinearAttention(Module):
         )
         self.eps = eps
 
-    def forward(
-        self, queries, keys, values, attn_mask, query_lengths, key_lengths
-    ):
-        # Apply the feature map to the queries and keys
-        Q = self.feature_map(queries)
-        K = self.feature_map(keys)
+    def forward(self, query, key, value, attn_mask, query_lengths, key_lengths):
+        # Apply the feature map to the query and key
+        mapped_query = self.feature_map(query)
+        mapped_key = self.feature_map(key)
 
         # Apply the key padding mask and make sure that the attn_mask is
         # all_ones
@@ -65,17 +63,33 @@ class LinearAttention(Module):
             raise RuntimeError(
                 "LinearAttention does not support arbitrary " "attention masks"
             )
-        K = K * key_lengths.float_matrix[:, :, None, None]
+        mapped_key = mapped_key * key_lengths.float_matrix[:, :, None, None]
 
         # Compute the KV matrix, namely the dot product of keys and values so
         # that we never explicitly compute the attention matrix and thus
         # decrease the complexity
-        KV = torch.einsum("nshd,nshm->nhmd", K, values)
+        key_value_product = torch.einsum(
+            "nshd,nshm->nhmd",
+            mapped_key,
+            value,
+        )
 
         # Compute the normalizer
-        Z = 1 / (torch.einsum("nlhd,nhd->nlh", Q, K.sum(dim=1)) + self.eps)
+        normalization_factor = 1 / (
+            torch.einsum(
+                "nlhd,nhd->nlh",
+                mapped_query,
+                mapped_key.sum(dim=1),
+            )
+            + self.eps
+        )
 
         # Finally compute and return the new values
-        V = torch.einsum("nlhd,nhmd,nlh->nlhm", Q, KV, Z)
+        attn_output = torch.einsum(
+            "nlhd,nhmd,nlh->nlhm",
+            mapped_query,
+            key_value_product,
+            normalization_factor,
+        )
 
-        return V.contiguous()
+        return attn_output.contiguous()

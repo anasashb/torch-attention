@@ -15,9 +15,9 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     attention = LinearAttention(query_dimensions=2, eps=1e-6)
 
     output = attention(
-        queries=query,
-        keys=key,
-        values=value,
+        query=query,
+        key=key,
+        value=value,
         attn_mask=attn_mask,
         query_lengths=None,
         key_lengths=key_lengths,
