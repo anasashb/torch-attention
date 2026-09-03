@@ -13,10 +13,11 @@
 """Implement unmasked linear attention."""
 
 import torch
+from torch import Tensor
 from torch.nn import Module
 
 
-def _elu_feature_map(tensor):
+def _elu_feature_map(tensor: Tensor) -> Tensor:
     return torch.nn.functional.elu(tensor) + 1
 
 
