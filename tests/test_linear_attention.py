@@ -40,3 +40,24 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
         ]
     )
     torch.testing.assert_close(output, expected_output)
+
+
+def test_linear_attention_accepts_tensor_feature_map() -> None:
+    """Checks that feature maps operate directly on tensors."""
+    query = torch.zeros((1, 2, 1, 1))
+    key = torch.zeros((1, 2, 1, 1))
+    value = torch.tensor([[[[2.0]], [[4.0]]]])
+    attn_mask = SimpleNamespace(all_ones=True)
+    key_lengths = SimpleNamespace(float_matrix=torch.ones((1, 2)))
+    attention = LinearAttention(feature_map=torch.ones_like, eps=0.0)
+
+    output = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+        query_lengths=None,
+        key_lengths=key_lengths,
+    )
+
+    torch.testing.assert_close(output, torch.full_like(value, 3.0))
