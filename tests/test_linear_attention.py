@@ -165,3 +165,46 @@ def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
         "[batch_size, num_heads, sequence_length, head_dim]; "
         f"got shape {tuple(tensors[tensor_index].shape)}."
     )
+
+
+@pytest.mark.parametrize(
+    "tensor_index",
+    [
+        pytest.param(0, id="query"),
+        pytest.param(1, id="key"),
+        pytest.param(2, id="value"),
+    ],
+)
+def test_linear_attention_rejects_mismatched_qkv_batch_sizes(
+    tensor_index: int,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that query, key, and value batch sizes must match."""
+    tensors = list(
+        make_qkv(
+            batch_size=2,
+            num_heads=4,
+            num_queries=3,
+            num_keys=5,
+            head_dim=6,
+        )
+    )
+    tensors[tensor_index] = tensors[tensor_index][:1]
+    query, key, value = tensors
+    attention = LinearAttention()
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Query, key, and value batch sizes must match; "
+        f"got query batch size {query.shape[0]}, "
+        f"key batch size {key.shape[0]}, and "
+        f"value batch size {value.shape[0]}. Use the same batch size for all "
+        "three tensors."
+    )
