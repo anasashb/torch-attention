@@ -186,19 +186,17 @@ class AttentionBase(nn.Module, ABC):
             key=key,
             value=value,
         )
+        AttentionBase._validate_qkv_head_counts(
+            query=query,
+            key=key,
+            value=value,
+        )
 
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
-        _, Hk, Lk, Dhk = key.shape
-        _, Hv, Lv, Dhv = value.shape
+        _, _, Lk, Dhk = key.shape
+        _, _, Lv, Dhv = value.shape
 
-        if not (Hq == Hk == Hv):
-            raise ValueError(
-                "Query, key, and value head counts must match; "
-                f"got query head count {Hq}, key head count {Hk}, and "
-                f"value head count {Hv}. Use the same number of heads for "
-                "all three tensors."
-            )
         if not (Dhq == Dhk == Dhv):
             raise ValueError(
                 "Query, key, and value head dimensions must match; "
@@ -261,6 +259,25 @@ class AttentionBase(nn.Module, ABC):
                 f"got query batch size {Bq}, key batch size {Bk}, and "
                 f"value batch size {Bv}. Use the same batch size for all "
                 "three tensors."
+            )
+
+    @staticmethod
+    def _validate_qkv_head_counts(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value head counts match."""
+        Hq = query.shape[1]
+        Hk = key.shape[1]
+        Hv = value.shape[1]
+
+        if not (Hq == Hk == Hv):
+            raise ValueError(
+                "Query, key, and value head counts must match; "
+                f"got query head count {Hq}, key head count {Hk}, and "
+                f"value head count {Hv}. Use the same number of heads for "
+                "all three tensors."
             )
 
     @staticmethod
