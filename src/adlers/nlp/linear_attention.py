@@ -18,6 +18,8 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
+from adlers.shared._attention_base import AttentionBase
+
 
 def _elu_feature_map(tensor: Tensor) -> Tensor:
     return torch.nn.functional.elu(tensor) + 1
@@ -85,6 +87,7 @@ class LinearAttention(Module):
         mapped_key = self.feature_map(key)
 
         if attn_mask is not None:
+            AttentionBase._validate_attn_mask_dtype(attn_mask=attn_mask)
             expected_mask_shape = (
                 query.shape[0],
                 1,
