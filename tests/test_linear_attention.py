@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from adlers.nlp.linear_attention import LinearAttention
+from tests._typing import MakeQKV
 
 
 def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
@@ -121,4 +122,46 @@ def test_linear_attention_rejects_non_boolean_key_padding_masks() -> None:
         "got mask dtype torch.float32. Use a torch.bool mask "
         "with True for positions that should be masked out and "
         "False for positions that can be attended to."
+    )
+
+
+@pytest.mark.parametrize(
+    ("tensor_name", "tensor_index"),
+    [
+        ("query", 0),
+        ("key", 1),
+        ("value", 2),
+    ],
+)
+def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
+    tensor_name: str,
+    tensor_index: int,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that query, key, and value tensors include all four axes."""
+    tensors = list(
+        make_qkv(
+            batch_size=2,
+            num_heads=1,
+            num_queries=3,
+            num_keys=3,
+            head_dim=6,
+        )
+    )
+    tensors[tensor_index] = tensors[tensor_index].squeeze(dim=1)
+    query, key, value = tensors
+    attention = LinearAttention()
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        f"{tensor_name.capitalize()} tensor must be 4D "
+        "[batch_size, num_heads, sequence_length, head_dim]; "
+        f"got shape {tuple(tensors[tensor_index].shape)}."
     )
