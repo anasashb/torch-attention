@@ -168,6 +168,23 @@ def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
 
 
 @pytest.mark.parametrize(
+    ("dimension", "dimension_name", "expected_guidance"),
+    [
+        pytest.param(
+            0,
+            "batch size",
+            "Use the same batch size for all three tensors.",
+            id="batch-size",
+        ),
+        pytest.param(
+            1,
+            "head count",
+            "Use the same number of heads for all three tensors.",
+            id="head-count",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
     "tensor_index",
     [
         pytest.param(0, id="query"),
@@ -175,11 +192,14 @@ def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
         pytest.param(2, id="value"),
     ],
 )
-def test_linear_attention_rejects_mismatched_qkv_batch_sizes(
+def test_linear_attention_rejects_mismatched_qkv_batch_sizes_and_head_counts(
     tensor_index: int,
+    dimension: int,
+    dimension_name: str,
+    expected_guidance: str,
     make_qkv: MakeQKV,
 ) -> None:
-    """Checks that query, key, and value batch sizes must match."""
+    """Checks that query, key, and value batch sizes and head counts match."""
     tensors = list(
         make_qkv(
             batch_size=2,
@@ -189,7 +209,11 @@ def test_linear_attention_rejects_mismatched_qkv_batch_sizes(
             head_dim=6,
         )
     )
-    tensors[tensor_index] = tensors[tensor_index][:1]
+    tensors[tensor_index] = tensors[tensor_index].narrow(
+        dim=dimension,
+        start=0,
+        length=1,
+    )
     query, key, value = tensors
     attention = LinearAttention()
 
@@ -202,9 +226,9 @@ def test_linear_attention_rejects_mismatched_qkv_batch_sizes(
         )
 
     assert str(error.value) == (
-        "Query, key, and value batch sizes must match; "
-        f"got query batch size {query.shape[0]}, "
-        f"key batch size {key.shape[0]}, and "
-        f"value batch size {value.shape[0]}. Use the same batch size for all "
-        "three tensors."
+        f"Query, key, and value {dimension_name}s must match; "
+        f"got query {dimension_name} {query.shape[dimension]}, "
+        f"key {dimension_name} {key.shape[dimension]}, and "
+        f"value {dimension_name} {value.shape[dimension]}. "
+        f"{expected_guidance}"
     )
