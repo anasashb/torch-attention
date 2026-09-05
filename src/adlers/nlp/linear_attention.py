@@ -97,6 +97,10 @@ class LinearAttention(Module):
             key=key,
             value=value,
         )
+        AttentionBase._validate_kv_sequence_lengths(
+            key=key,
+            value=value,
+        )
 
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
