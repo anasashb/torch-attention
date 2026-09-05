@@ -232,3 +232,28 @@ def test_linear_attention_rejects_mismatched_qkv_batch_sizes_and_head_counts(
         f"value {dimension_name} {value.shape[dimension]}. "
         f"{expected_guidance}"
     )
+
+
+def test_linear_attention_rejects_unequal_key_and_value_lengths(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that each key position must have a corresponding value."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+    )
+    value = value[..., :-1, :]
+    attention = LinearAttention()
+
+    with pytest.raises(
+        ValueError,
+        match="Key and value sequence lengths must match",
+    ):
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
