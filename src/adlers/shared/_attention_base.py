@@ -181,19 +181,17 @@ class AttentionBase(nn.Module, ABC):
             key=key,
             value=value,
         )
+        AttentionBase._validate_qkv_batch_sizes(
+            query=query,
+            key=key,
+            value=value,
+        )
 
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
-        Bk, Hk, Lk, Dhk = key.shape
-        Bv, Hv, Lv, Dhv = value.shape
+        _, Hk, Lk, Dhk = key.shape
+        _, Hv, Lv, Dhv = value.shape
 
-        if not (Bq == Bk == Bv):
-            raise ValueError(
-                "Query, key, and value batch sizes must match; "
-                f"got query batch size {Bq}, key batch size {Bk}, and "
-                f"value batch size {Bv}. Use the same batch size for all "
-                "three tensors."
-            )
         if not (Hq == Hk == Hv):
             raise ValueError(
                 "Query, key, and value head counts must match; "
@@ -245,6 +243,25 @@ class AttentionBase(nn.Module, ABC):
                     "[batch_size, num_heads, sequence_length, head_dim]; "
                     f"got shape {tuple(tensor.shape)}."
                 )
+
+    @staticmethod
+    def _validate_qkv_batch_sizes(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value batch sizes match."""
+        Bq = query.shape[0]
+        Bk = key.shape[0]
+        Bv = value.shape[0]
+
+        if not (Bq == Bk == Bv):
+            raise ValueError(
+                "Query, key, and value batch sizes must match; "
+                f"got query batch size {Bq}, key batch size {Bk}, and "
+                f"value batch size {Bv}. Use the same batch size for all "
+                "three tensors."
+            )
 
     @staticmethod
     def _validate_attn_mask_dtype(attn_mask: Tensor) -> None:
