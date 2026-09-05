@@ -176,17 +176,11 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             None.
         """
-        for tensor_name, tensor in (
-            ("Query", query),
-            ("Key", key),
-            ("Value", value),
-        ):
-            if tensor.ndim != 4:
-                raise ValueError(
-                    f"{tensor_name} tensor must be 4D "
-                    "[batch_size, num_heads, sequence_length, head_dim]; "
-                    f"got shape {tuple(tensor.shape)}."
-                )
+        AttentionBase._validate_qkv_rank(
+            query=query,
+            key=key,
+            value=value,
+        )
 
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
@@ -232,6 +226,25 @@ class AttentionBase(nn.Module, ABC):
                 "num_keys), or (batch_size, num_heads, num_queries, "
                 "num_keys)."
             )
+
+    @staticmethod
+    def _validate_qkv_rank(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value tensors are four-dimensional."""
+        for tensor_name, tensor in (
+            ("Query", query),
+            ("Key", key),
+            ("Value", value),
+        ):
+            if tensor.ndim != 4:
+                raise ValueError(
+                    f"{tensor_name} tensor must be 4D "
+                    "[batch_size, num_heads, sequence_length, head_dim]; "
+                    f"got shape {tuple(tensor.shape)}."
+                )
 
     @staticmethod
     def _validate_attn_mask_dtype(attn_mask: Tensor) -> None:
