@@ -92,6 +92,11 @@ class LinearAttention(Module):
             key=key,
             value=value,
         )
+        AttentionBase._validate_qkv_head_counts(
+            query=query,
+            key=key,
+            value=value,
+        )
 
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
