@@ -195,7 +195,7 @@ class AttentionBase(nn.Module, ABC):
         # Short-hand notations for shapes
         Bq, Hq, Lq, Dhq = query.shape
         _, _, Lk, Dhk = key.shape
-        _, _, Lv, Dhv = value.shape
+        _, _, _, Dhv = value.shape
 
         if not (Dhq == Dhk == Dhv):
             raise ValueError(
@@ -204,12 +204,10 @@ class AttentionBase(nn.Module, ABC):
                 f"and value head dimension {Dhv}. Use the same head dimension "
                 "for all three tensors."
             )
-        if Lk != Lv:
-            raise ValueError(
-                "Key and value sequence lengths must match; "
-                f"got key length {Lk} and value length {Lv}. "
-                "Provide one value position for each key position."
-            )
+        AttentionBase._validate_kv_sequence_lengths(
+            key=key,
+            value=value,
+        )
 
         if attn_mask is not None and attn_mask.shape not in [
             (Lq, Lk),
@@ -278,6 +276,19 @@ class AttentionBase(nn.Module, ABC):
                 f"got query head count {Hq}, key head count {Hk}, and "
                 f"value head count {Hv}. Use the same number of heads for "
                 "all three tensors."
+            )
+
+    @staticmethod
+    def _validate_kv_sequence_lengths(key: Tensor, value: Tensor) -> None:
+        """Validates that key and value sequence lengths match."""
+        Lk = key.shape[-2]
+        Lv = value.shape[-2]
+
+        if Lk != Lv:
+            raise ValueError(
+                "Key and value sequence lengths must match; "
+                f"got key length {Lk} and value length {Lv}. "
+                "Provide one value position for each key position."
             )
 
     @staticmethod
