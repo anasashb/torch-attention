@@ -82,6 +82,12 @@ class LinearAttention(Module):
         value: Tensor,
         attn_mask: Tensor | None = None,
     ) -> tuple[Tensor, None]:
+        AttentionBase._validate_qkv_rank(
+            query=query,
+            key=key,
+            value=value,
+        )
+
         # Apply the feature map to the query and key
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
