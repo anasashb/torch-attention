@@ -100,3 +100,25 @@ def test_linear_attention_rejects_nonzero_dropout_rate() -> None:
         "Linear attention does not support dropout; got dropout_rate 0.1. "
         "Set dropout_rate=0.0."
     )
+
+
+def test_linear_attention_rejects_non_boolean_key_padding_masks() -> None:
+    """Checks that LinearAttention requires boolean key-padding masks."""
+    query = torch.zeros(size=(1, 1, 2, 2))
+    attn_mask = torch.zeros(size=(1, 1, 1, 2), dtype=torch.float32)
+    attention = LinearAttention()
+
+    with pytest.raises(TypeError) as error:
+        attention(
+            query=query,
+            key=query,
+            value=query,
+            attn_mask=attn_mask,
+        )
+
+    assert str(error.value) == (
+        "Only boolean attention masks are supported; "
+        "got mask dtype torch.float32. Use a torch.bool mask "
+        "with True for positions that should be masked out and "
+        "False for positions that can be attended to."
+    )
