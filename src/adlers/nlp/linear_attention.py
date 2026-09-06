@@ -16,7 +16,7 @@
 # Equation references below refer to this paper.
 #
 
-"""Implement unmasked linear attention."""
+"""Implement Linear Attention."""
 
 from collections.abc import Callable
 
