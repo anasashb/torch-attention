@@ -87,6 +87,29 @@ class LinearAttention(Module):
         value: Tensor,
         attn_mask: Tensor | None = None,
     ) -> tuple[Tensor, None]:
+        """
+        Computes non-causal Linear Attention.
+
+        Args:
+            query (Tensor): Query tensor of shape [batch_size, num_heads,
+                num_queries, head_dim].
+            key (Tensor): Key tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_keys, value_head_dim].
+            attn_mask (Tensor | None): Optional boolean key-padding mask of
+                shape [batch_size, 1, 1, num_keys]. True marks key positions
+                that should be masked out.
+
+        Returns:
+            tuple[Tensor, None]: The attention output of shape [batch_size,
+                num_heads, num_queries, value_head_dim] and None.
+
+        Raises:
+            ValueError: If the input shapes are incompatible or the attention
+                mask has an unsupported shape.
+            TypeError: If the attention mask is not boolean.
+        """
         AttentionBase._validate_qkv_rank(
             query=query,
             key=key,
