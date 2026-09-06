@@ -97,6 +97,10 @@ class LinearAttention(Module):
             key=key,
             value=value,
         )
+        AttentionBase._validate_qk_head_dimensions(
+            query=query,
+            key=key,
+        )
         AttentionBase._validate_kv_sequence_lengths(
             key=key,
             value=value,
