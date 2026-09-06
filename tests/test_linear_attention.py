@@ -293,3 +293,32 @@ def test_linear_attention_rejects_unequal_key_and_value_lengths(
             value=value,
             attn_mask=None,
         )
+
+
+def test_linear_attention_rejects_mismatched_query_and_key_head_dimensions(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that query and key head dimensions must match."""
+    query, _, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+        head_dim=6,
+    )
+    key = torch.zeros(size=(2, 4, 5, 5))
+    attention = LinearAttention()
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Query and key head dimensions must match; "
+        "got query head dimension 6 and key head dimension 5. "
+        "Use the same head dimension for both tensors."
+    )
