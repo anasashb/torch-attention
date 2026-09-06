@@ -26,6 +26,42 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     torch.testing.assert_close(output, expected_output)
 
 
+@pytest.mark.parametrize(
+    ("num_queries", "num_keys"),
+    [(3, 3), (3, 5)],
+)
+def test_linear_attention_matches_quadratic_reference(
+    num_queries: int,
+    num_keys: int,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks linear attention against the full query-key calculation."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=num_queries,
+        num_keys=num_keys,
+        head_dim=6,
+    )
+    eps = 1e-6
+    attention = LinearAttention(eps=eps)
+
+    output, _ = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    mapped_query = torch.nn.functional.elu(input=query) + 1
+    mapped_key = torch.nn.functional.elu(input=key) + 1
+    scores = mapped_query @ mapped_key.transpose(dim0=-2, dim1=-1)
+    weights = scores / (scores.sum(dim=-1, keepdim=True) + eps)
+    expected_output = weights @ value
+
+    torch.testing.assert_close(actual=output, expected=expected_output)
+
+
 def test_linear_attention_accepts_tensor_feature_map() -> None:
     """Checks that feature maps operate directly on tensors."""
     query = torch.zeros((1, 1, 2, 1))
