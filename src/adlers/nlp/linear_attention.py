@@ -134,7 +134,7 @@ class LinearAttention(Module):
             value=value,
         )
 
-        # Apply the feature map to the query and key
+        # Map queries and keys into feature space (Equation 4)
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
 
@@ -156,16 +156,14 @@ class LinearAttention(Module):
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
-        # Compute the KV matrix, namely the dot product of keys and values so
-        # that we never explicitly compute the attention matrix and thus
-        # decrease the complexity
+        # Compute phi(K)^T V first (right-hand side of Equation 6)
         key_value_product = torch.einsum(
             "bhsd,bhsm->bhmd",
             mapped_key,
             value,
         )
 
-        # Compute the normalizer
+        # Invert the denominator from Equation 5 for the final multiplication
         normalization_factor = 1 / (
             torch.einsum(
                 "bhld,bhd->bhl",
@@ -175,7 +173,7 @@ class LinearAttention(Module):
             + self.eps
         )
 
-        # Finally compute and return the new values
+        # Apply the shared key-value product to every query (Equations 5-6)
         attn_output = torch.einsum(
             "bhld,bhmd,bhl->bhlm",
             mapped_query,
