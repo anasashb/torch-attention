@@ -32,28 +32,27 @@ def _elu_feature_map(tensor: Tensor) -> Tensor:
 
 
 class LinearAttention(Module):
-    """Implement unmasked attention using dot product of feature maps in
-    O(N D^2) complexity.
+    """
+    Implements the Linear Attention mechanism from *Transformers are RNNs*.
 
-    Given the queries, keys and values as Q, K, V instead of computing
+    Mapped keys and values are combined before they are applied to the
+    queries, following Equations 5 and 6 of *Transformers are RNNs*. This
+    avoids constructing the full query-key attention matrix.
 
-        V' = softmax(Q.mm(K.t()), dim=-1).mm(V),
+    Args:
+        feature_map (Callable[[Tensor], Tensor] | None): Function applied to
+            query and key tensors. When None, defaults to ELU(x) + 1 from
+            Equation 7.
+        eps (float): Small value added to the normalization denominator for
+            numerical stability.
+        dropout_rate (float): Dropout rate. Only 0.0 is supported.
+        output_attention_scores (bool): Whether to return attention scores.
+            Only False is supported.
 
-    we make use of a feature map function Φ(.) and perform the following
-    computation
-
-        V' = normalize(Φ(Q).mm(Φ(K).t())).mm(V).
-
-    The above can be computed in O(N D^2) complexity where D is the
-    dimensionality of Q, K and V and N is the sequence length. Depending on the
-    feature map, however, the complexity of the attention might be limited.
-
-    Arguments
-    ---------
-        feature_map: callable, a callable that applies the feature map to the
-                     last dimension of a tensor (default: elu(x)+1)
-        eps: float, a small number to ensure the numerical stability of the
-             denominator (default: 1e-6)
+    Attributes:
+        feature_map (Callable[[Tensor], Tensor]): Configured feature-map
+            function.
+        eps (float): Value added to the normalization denominator.
     """
 
     def __init__(
