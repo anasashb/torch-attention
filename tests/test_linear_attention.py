@@ -27,12 +27,13 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
 
 
 @pytest.mark.parametrize(
-    ("num_queries", "num_keys"),
-    [(3, 3), (3, 5)],
+    ("num_queries", "num_keys", "value_head_dim"),
+    [(3, 3, 6), (3, 5, 4)],
 )
 def test_linear_attention_matches_quadratic_reference(
     num_queries: int,
     num_keys: int,
+    value_head_dim: int,
     make_qkv: MakeQKV,
 ) -> None:
     """Checks linear attention against the full query-key calculation."""
@@ -43,6 +44,7 @@ def test_linear_attention_matches_quadratic_reference(
         num_keys=num_keys,
         head_dim=6,
     )
+    value = value[..., :value_head_dim]
     eps = 1e-6
     attention = LinearAttention(eps=eps)
 
