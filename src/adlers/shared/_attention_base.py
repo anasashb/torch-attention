@@ -279,6 +279,19 @@ class AttentionBase(nn.Module, ABC):
             )
 
     @staticmethod
+    def _validate_qk_head_dimensions(query: Tensor, key: Tensor) -> None:
+        """Validates that query and key head dimensions match."""
+        Dhq = query.shape[-1]
+        Dhk = key.shape[-1]
+
+        if Dhq != Dhk:
+            raise ValueError(
+                "Query and key head dimensions must match; "
+                f"got query head dimension {Dhq} and key head dimension {Dhk}. "
+                "Use the same head dimension for both tensors."
+            )
+
+    @staticmethod
     def _validate_kv_sequence_lengths(key: Tensor, value: Tensor) -> None:
         """Validates that key and value sequence lengths match."""
         Lk = key.shape[-2]
