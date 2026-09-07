@@ -60,7 +60,7 @@ class CausalLinearAttention(Module):
     def __init__(
         self, query_dimensions, feature_map=None, eps=1e-6, event_dispatcher=""
     ):
-        super(CausalLinearAttention, self).__init__()
+        super().__init__()
         self.feature_map = (
             feature_map(query_dimensions)
             if feature_map
@@ -95,10 +95,8 @@ class CausalLinearAttention(Module):
         # lower triangular causal mask
         if not attn_mask.lower_triangular:
             raise RuntimeError(
-                (
-                    "CausalLinearAttention only supports full "
-                    "lower triangular masks"
-                )
+                "CausalLinearAttention only supports full "
+                "lower triangular masks"
             )
         K = K * key_lengths.float_matrix[:, :, None, None]
 
