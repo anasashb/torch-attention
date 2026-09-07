@@ -17,7 +17,6 @@ import torch
 from torch.nn import Module
 
 from ..causal_product import causal_dot_product
-from ..events import EventDispatcher
 from ..feature_maps import elu_feature_map
 
 
@@ -45,14 +44,9 @@ class CausalLinearAttention(Module):
                      last dimension of a tensor (default: elu(x)+1)
         eps: float, a small number to ensure the numerical stability of the
              denominator (default: 1e-6)
-        event_dispatcher: str or EventDispatcher instance to be used by this
-                          module for dispatching events (default: the default
-                          global dispatcher)
     """
 
-    def __init__(
-        self, query_dimensions, feature_map=None, eps=1e-6, event_dispatcher=""
-    ):
+    def __init__(self, query_dimensions, feature_map=None, eps=1e-6):
         super().__init__()
         self.feature_map = (
             feature_map(query_dimensions)
@@ -60,7 +54,6 @@ class CausalLinearAttention(Module):
             else elu_feature_map(query_dimensions)
         )
         self.eps = eps
-        self.event_dispatcher = EventDispatcher.get(event_dispatcher)
 
     def _make_sizes_compatible(self, Q, K):
         """Either slice or pad K in case that the sizes do not match between Q
