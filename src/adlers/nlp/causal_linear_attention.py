@@ -17,7 +17,7 @@ import torch
 from torch.nn import Module
 
 from ..causal_product import causal_dot_product
-from ..feature_maps import elu_feature_map
+from .linear_attention import _elu_feature_map
 
 
 def causal_linear(Q, K, V):
@@ -46,12 +46,10 @@ class CausalLinearAttention(Module):
              denominator (default: 1e-6)
     """
 
-    def __init__(self, query_dimensions, feature_map=None, eps=1e-6):
+    def __init__(self, feature_map=None, eps=1e-6):
         super().__init__()
         self.feature_map = (
-            feature_map(query_dimensions)
-            if feature_map
-            else elu_feature_map(query_dimensions)
+            feature_map if feature_map is not None else _elu_feature_map
         )
         self.eps = eps
 
@@ -73,9 +71,8 @@ class CausalLinearAttention(Module):
         self, queries, keys, values, attn_mask, query_lengths, key_lengths
     ):
         # Apply the feature map to the queries and keys
-        self.feature_map.new_feature_map(queries.device)
-        Q = self.feature_map.forward_queries(queries)
-        K = self.feature_map.forward_keys(keys)
+        Q = self.feature_map(queries)
+        K = self.feature_map(keys)
 
         # Apply the key padding mask and make sure the attn_mask is a
         # lower triangular causal mask
