@@ -29,11 +29,11 @@ from ..feature_maps import elu_feature_map
 
 
 def causal_linear(Q, K, V):
-    Q = Q.permute(0,2,1,3).contiguous()
-    K = K.permute(0,2,1,3).contiguous()
-    V = V.permute(0,2,1,3).contiguous()
+    Q = Q.permute(0, 2, 1, 3).contiguous()
+    K = K.permute(0, 2, 1, 3).contiguous()
+    V = V.permute(0, 2, 1, 3).contiguous()
     V_new = causal_dot_product(Q, K, V)
-    return V_new.permute(0,2,1,3).contiguous()
+    return V_new.permute(0, 2, 1, 3).contiguous()
 
 
 class CausalLinearAttention(Module):
@@ -56,12 +56,15 @@ class CausalLinearAttention(Module):
                           module for dispatching events (default: the default
                           global dispatcher)
     """
-    def __init__(self, query_dimensions, feature_map=None, eps=1e-6,
-                 event_dispatcher=""):
+
+    def __init__(
+        self, query_dimensions, feature_map=None, eps=1e-6, event_dispatcher=""
+    ):
         super(CausalLinearAttention, self).__init__()
         self.feature_map = (
-            feature_map(query_dimensions) if feature_map else
-            elu_feature_map(query_dimensions)
+            feature_map(query_dimensions)
+            if feature_map
+            else elu_feature_map(query_dimensions)
         )
         self.eps = eps
         self.event_dispatcher = EventDispatcher.get(event_dispatcher)
@@ -78,10 +81,11 @@ class CausalLinearAttention(Module):
             return Q, K[:, :L, :, :]
 
         if L > S:
-            return Q, torch.cat([K, K.new_zeros(N, L-S, H, E)], dim=1)
+            return Q, torch.cat([K, K.new_zeros(N, L - S, H, E)], dim=1)
 
-    def forward(self, queries, keys, values, attn_mask, query_lengths,
-                key_lengths):
+    def forward(
+        self, queries, keys, values, attn_mask, query_lengths, key_lengths
+    ):
         # Apply the feature map to the queries and keys
         self.feature_map.new_feature_map(queries.device)
         Q = self.feature_map.forward_queries(queries)
@@ -90,8 +94,12 @@ class CausalLinearAttention(Module):
         # Apply the key padding mask and make sure the attn_mask is a
         # lower triangular causal mask
         if not attn_mask.lower_triangular:
-            raise RuntimeError(("CausalLinearAttention only supports full "
-                                "lower triangular masks"))
+            raise RuntimeError(
+                (
+                    "CausalLinearAttention only supports full "
+                    "lower triangular masks"
+                )
+            )
         K = K * key_lengths.float_matrix[:, :, None, None]
 
         # Ensure that Q and K have compatible sizes for the following
@@ -104,14 +112,10 @@ class CausalLinearAttention(Module):
         #       that seems relatively costly for a simple normalization.
 
         # Compute the normalizers
-        Z = 1/(torch.einsum("nlhi,nlhi->nlh", Q, K.cumsum(1)) + self.eps)
+        Z = 1 / (torch.einsum("nlhi,nlhi->nlh", Q, K.cumsum(1)) + self.eps)
 
         # Compute the unnormalized result
-        V = causal_linear(
-            Q,
-            K,
-            values
-        )
+        V = causal_linear(Q, K, values)
 
         return V * Z[:, :, :, None]
 
@@ -119,10 +123,11 @@ class CausalLinearAttention(Module):
 # Register the attention implementation so that it becomes available in our
 # builders
 AttentionRegistry.register(
-    "causal-linear", CausalLinearAttention,
+    "causal-linear",
+    CausalLinearAttention,
     [
         ("query_dimensions", Int),
         ("feature_map", Optional(Callable)),
-        ("event_dispatcher", Optional(EventDispatcherInstance, ""))
-    ]
+        ("event_dispatcher", Optional(EventDispatcherInstance, "")),
+    ],
 )
