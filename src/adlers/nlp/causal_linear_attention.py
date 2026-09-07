@@ -16,13 +16,6 @@
 import torch
 from torch.nn import Module
 
-from ..attention_registry import (
-    AttentionRegistry,
-    Callable,
-    EventDispatcherInstance,
-    Int,
-    Optional,
-)
 from ..causal_product import causal_dot_product
 from ..events import EventDispatcher
 from ..feature_maps import elu_feature_map
@@ -116,16 +109,3 @@ class CausalLinearAttention(Module):
         V = causal_linear(Q, K, values)
 
         return V * Z[:, :, :, None]
-
-
-# Register the attention implementation so that it becomes available in our
-# builders
-AttentionRegistry.register(
-    "causal-linear",
-    CausalLinearAttention,
-    [
-        ("query_dimensions", Int),
-        ("feature_map", Optional(Callable)),
-        ("event_dispatcher", Optional(EventDispatcherInstance, "")),
-    ],
-)
