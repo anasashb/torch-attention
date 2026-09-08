@@ -17,15 +17,13 @@
 import torch
 from torch.nn import Module
 
+from .causal_product_cpu import causal_dot_backward as causal_dot_backward_cpu
+from .causal_product_cpu import causal_dot_product as causal_dot_product_cpu
 from .linear_attention import _elu_feature_map
 
-from .causal_product_cpu import causal_dot_product as causal_dot_product_cpu, \
-    causal_dot_backward as causal_dot_backward_cpu
-
 try:
-    from .causal_product_cuda import \
-        causal_dot_product as causal_dot_product_cuda, \
-        causal_dot_backward as causal_dot_backward_cuda
+    from .causal_product_cuda import causal_dot_backward as causal_dot_backward_cuda
+    from .causal_product_cuda import causal_dot_product as causal_dot_product_cuda
 except ImportError:
     causal_dot_product_cuda = causal_dot_backward_cuda = None
 
