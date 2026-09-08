@@ -20,6 +20,7 @@ Source revision:
 
 The adapted code is located in:
 src/adlers/nlp/linear_attention.py
+src/adlers/nlp/causal_linear_attention.py
 
 fast-transformers is licensed under the MIT License.
 See LICENSES/fast-transformers-MIT.txt.
