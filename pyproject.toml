@@ -69,6 +69,9 @@ torch = [
 requires = ["setuptools>=77.0.0", "torch>=2.9.1"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["src"]
 namespaces = false
