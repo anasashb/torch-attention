@@ -8,6 +8,7 @@ license = "MIT AND Apache-2.0"
 license-files = [
     "LICENSE",
     "LICENSES/fast-transformers-MIT.txt",
+    "LICENSES/causal-product-NVIDIA-MIT.txt",
     "LICENSES/Apache-2.0.txt",
     "NOTICE",
 ]

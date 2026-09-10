@@ -22,9 +22,14 @@ The adapted code is located in:
 src/adlers/nlp/linear_attention.py
 src/adlers/nlp/causal_linear_attention.py
 src/adlers/csrc/causal_product_cpu.cpp
+src/adlers/csrc/cuda/causal_product_cuda.cu
 
 fast-transformers is licensed under the MIT License.
 See LICENSES/fast-transformers-MIT.txt.
+
+The CUDA causal product includes modifications by NVIDIA Corporation that
+are licensed under the MIT License.
+See LICENSES/causal-product-NVIDIA-MIT.txt.
 
 Except for files that state otherwise, ADLERS is licensed under the MIT
 License. See LICENSE.
