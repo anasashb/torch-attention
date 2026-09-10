@@ -66,18 +66,12 @@ torch = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.10.0"]
-build-backend = "uv_build"
+requires = ["setuptools>=77.0.0", "torch>=2.9.1"]
+build-backend = "setuptools.build_meta"
 
-[tool.uv.build-backend]
-module-name = ["adlers"]
-module-root = "src"
-source-include = ["src"]
-source-exclude = [
-    "**/.mypy_cache",
-    "**/__pycache__",
-    "**/*.pyc",
-]
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
 
 [tool.black]
 line-length = 80
