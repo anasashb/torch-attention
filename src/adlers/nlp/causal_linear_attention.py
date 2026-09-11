@@ -43,37 +43,51 @@ class CausalDotProduct(torch.autograd.Function):
     }
 
     @staticmethod
-    def forward(ctx, Q, K, V):
+    def forward(ctx, query, key, value):
         # Save the inputs for the gradient computation
-        ctx.save_for_backward(Q, K, V)
+        ctx.save_for_backward(query, key, value)
 
         # Create the output tensor
-        device = Q.device
-        N, H, L, _ = Q.shape
-        _, _, _, M = V.shape
-        product = torch.zeros((N, H, L, M), device=device)
-
-        # Actually perform the dot product
-        CausalDotProduct.dot[device.type](Q.data, K.data, V.data, product)
-
-        return product
-
-    @staticmethod
-    def backward(ctx, grad_out):
-        # Extract the saved tensors
-        Q, K, V = ctx.saved_tensors
-
-        # Allocate memory for the gradients
-        grad_Q = torch.zeros_like(Q)
-        grad_K = torch.zeros_like(K)
-        grad_V = torch.zeros_like(V)
-
-        # Actually compute the gradients
-        CausalDotProduct.dot_backward[Q.device.type](
-            Q.data, K.data, V.data, grad_out, grad_Q, grad_K, grad_V
+        device = query.device
+        batch_size, num_heads, num_queries, _ = query.shape
+        value_head_dim = value.shape[-1]
+        attn_output = torch.zeros(
+            (batch_size, num_heads, num_queries, value_head_dim),
+            device=device,
         )
 
-        return grad_Q, grad_K, grad_V
+        # Actually perform the dot product
+        CausalDotProduct.dot[device.type](
+            query.data,
+            key.data,
+            value.data,
+            attn_output,
+        )
+
+        return attn_output
+
+    @staticmethod
+    def backward(ctx, output_gradient):
+        # Extract the saved tensors
+        query, key, value = ctx.saved_tensors
+
+        # Allocate memory for the gradients
+        query_gradient = torch.zeros_like(query)
+        key_gradient = torch.zeros_like(key)
+        value_gradient = torch.zeros_like(value)
+
+        # Actually compute the gradients
+        CausalDotProduct.dot_backward[query.device.type](
+            query.data,
+            key.data,
+            value.data,
+            output_gradient,
+            query_gradient,
+            key_gradient,
+            value_gradient,
+        )
+
+        return query_gradient, key_gradient, value_gradient
 
 
 # Alias the autograd functions to python style snake case naming
