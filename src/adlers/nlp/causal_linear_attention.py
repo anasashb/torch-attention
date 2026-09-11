@@ -105,7 +105,7 @@ class CausalDotProduct(torch.autograd.Function):
 causal_dot_product = CausalDotProduct.apply
 
 
-def causal_linear(mapped_query, mapped_key, value):
+def causal_linear(mapped_query, mapped_key, value) -> Tensor:
     mapped_query = mapped_query.permute(0, 2, 1, 3).contiguous()
     mapped_key = mapped_key.permute(0, 2, 1, 3).contiguous()
     value = value.permute(0, 2, 1, 3).contiguous()
