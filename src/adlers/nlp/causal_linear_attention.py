@@ -148,8 +148,8 @@ class CausalLinearAttention(Module):
 
     def _make_sizes_compatible(
         self,
-        mapped_query,
-        mapped_key,
+        mapped_query: Tensor,
+        mapped_key: Tensor,
     ) -> tuple[Tensor, Tensor]:
         """Either slice or pad K in case that the sizes do not match between Q
         and K."""
