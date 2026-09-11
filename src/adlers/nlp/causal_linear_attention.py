@@ -105,12 +105,16 @@ class CausalDotProduct(torch.autograd.Function):
 causal_dot_product = CausalDotProduct.apply
 
 
-def causal_linear(Q, K, V):
-    Q = Q.permute(0, 2, 1, 3).contiguous()
-    K = K.permute(0, 2, 1, 3).contiguous()
-    V = V.permute(0, 2, 1, 3).contiguous()
-    V_new = causal_dot_product(Q, K, V)
-    return V_new.permute(0, 2, 1, 3).contiguous()
+def causal_linear(mapped_query, mapped_key, value):
+    mapped_query = mapped_query.permute(0, 2, 1, 3).contiguous()
+    mapped_key = mapped_key.permute(0, 2, 1, 3).contiguous()
+    value = value.permute(0, 2, 1, 3).contiguous()
+    unnormalized_attn_output = causal_dot_product(
+        mapped_query,
+        mapped_key,
+        value,
+    )
+    return unnormalized_attn_output.permute(0, 2, 1, 3).contiguous()
 
 
 class CausalLinearAttention(Module):
