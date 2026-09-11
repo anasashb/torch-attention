@@ -146,7 +146,11 @@ class CausalLinearAttention(Module):
         )
         self.eps = eps
 
-    def _make_sizes_compatible(self, mapped_query, mapped_key):
+    def _make_sizes_compatible(
+        self,
+        mapped_query,
+        mapped_key,
+    ) -> tuple[Tensor, Tensor]:
         """Either slice or pad K in case that the sizes do not match between Q
         and K."""
         batch_size, num_queries, num_heads, head_dim = mapped_query.shape
