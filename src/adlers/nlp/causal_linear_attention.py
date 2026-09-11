@@ -146,19 +146,30 @@ class CausalLinearAttention(Module):
         )
         self.eps = eps
 
-    def _make_sizes_compatible(self, Q, K):
+    def _make_sizes_compatible(self, mapped_query, mapped_key):
         """Either slice or pad K in case that the sizes do not match between Q
         and K."""
-        N, L, H, E = Q.shape
-        _, S, _, _ = K.shape
-        if L == S:
-            return Q, K
+        batch_size, num_queries, num_heads, head_dim = mapped_query.shape
+        _, num_keys, _, _ = mapped_key.shape
+        if num_queries == num_keys:
+            return mapped_query, mapped_key
 
-        if L < S:
-            return Q, K[:, :L, :, :]
+        if num_queries < num_keys:
+            return mapped_query, mapped_key[:, :num_queries, :, :]
 
-        if L > S:
-            return Q, torch.cat([K, K.new_zeros(N, L - S, H, E)], dim=1)
+        if num_queries > num_keys:
+            return mapped_query, torch.cat(
+                [
+                    mapped_key,
+                    mapped_key.new_zeros(
+                        batch_size,
+                        num_queries - num_keys,
+                        num_heads,
+                        head_dim,
+                    ),
+                ],
+                dim=1,
+            )
 
     def forward(
         self, queries, keys, values, attn_mask, query_lengths, key_lengths
