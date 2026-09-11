@@ -14,6 +14,8 @@
 
 """Implement causally masked linear attention."""
 
+from typing import Any
+
 import torch
 from torch import Tensor
 from torch.nn import Module
@@ -44,7 +46,12 @@ class CausalDotProduct(torch.autograd.Function):
     }
 
     @staticmethod
-    def forward(ctx, query, key, value) -> Tensor:
+    def forward(
+        ctx: Any,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> Tensor:
         # Save the inputs for the gradient computation
         ctx.save_for_backward(query, key, value)
 
@@ -69,8 +76,8 @@ class CausalDotProduct(torch.autograd.Function):
 
     @staticmethod
     def backward(
-        ctx,
-        output_gradient,
+        ctx: Any,
+        output_gradient: Tensor,
     ) -> tuple[Tensor, Tensor, Tensor]:
         # Extract the saved tensors
         query, key, value = ctx.saved_tensors
