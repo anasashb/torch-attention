@@ -14,6 +14,7 @@
 
 """Implement causally masked linear attention."""
 
+from collections.abc import Callable
 from typing import Any
 
 import torch
@@ -139,7 +140,11 @@ class CausalLinearAttention(Module):
              denominator (default: 1e-6)
     """
 
-    def __init__(self, feature_map=None, eps=1e-6) -> None:
+    def __init__(
+        self,
+        feature_map: Callable[[Tensor], Tensor] | None = None,
+        eps: float = 1e-6,
+    ) -> None:
         super().__init__()
         self.feature_map = (
             feature_map if feature_map is not None else _elu_feature_map
@@ -176,7 +181,13 @@ class CausalLinearAttention(Module):
             )
 
     def forward(
-        self, query, key, value, attn_mask, query_lengths, key_lengths
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Any,
+        query_lengths: Any,
+        key_lengths: Any,
     ) -> Tensor:
         # Apply the feature map to the queries and keys
         mapped_query = self.feature_map(query)
