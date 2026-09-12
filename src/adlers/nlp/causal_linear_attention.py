@@ -205,7 +205,6 @@ class CausalLinearAttention(Module):
         key: Tensor,
         value: Tensor,
         attn_mask: Any,
-        query_lengths: Any,
         key_lengths: Any,
     ) -> Tensor:
         # Apply the feature map to the queries and keys (Equation 7)
