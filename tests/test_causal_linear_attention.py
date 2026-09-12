@@ -19,7 +19,6 @@ def test_causal_linear_attention_uses_bhld_layout() -> None:
         key=key,
         value=value,
         attn_mask=attn_mask,
-        query_lengths=None,
         key_lengths=key_lengths,
     )
 
