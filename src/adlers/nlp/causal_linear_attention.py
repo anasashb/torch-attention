@@ -232,11 +232,6 @@ class CausalLinearAttention(Module):
             mapped_key,
         )
 
-        # TODO: Shall we divide the Q and K with a relatively large number to
-        #       avoid numerical instabilities in computing the denominator?
-        #       We used to divide each with the max norm of all q and k but
-        #       that seems relatively costly for a simple normalization.
-
         # Invert the denominator from Equation 12 for the final multiplication
         normalization_factor = 1 / (
             torch.einsum(
