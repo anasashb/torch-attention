@@ -212,7 +212,7 @@ class CausalLinearAttention(Module):
         query_lengths: Any,
         key_lengths: Any,
     ) -> Tensor:
-        # Apply the feature map to the queries and keys
+        # Apply the feature map to the queries and keys (Equation 7)
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
 
@@ -237,7 +237,7 @@ class CausalLinearAttention(Module):
         #       We used to divide each with the max norm of all q and k but
         #       that seems relatively costly for a simple normalization.
 
-        # Compute the normalizers
+        # Invert the denominator from Equation 12 for the final multiplication
         normalization_factor = 1 / (
             torch.einsum(
                 "nlhi,nlhi->nlh",
@@ -247,7 +247,7 @@ class CausalLinearAttention(Module):
             + self.eps
         )
 
-        # Compute the unnormalized result
+        # Compute the numerator from Equation 12
         unnormalized_attn_output = causal_linear(
             mapped_query,
             mapped_key,
