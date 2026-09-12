@@ -129,21 +129,23 @@ def causal_linear(
 
 
 class CausalLinearAttention(Module):
-    """Implement causally masked attention using dot product of feature maps in
-    O(N D^2) complexity.
+    """
+    Implements causal Linear Attention from *Transformers are RNNs*.
 
-    See fast_transformers.attention.linear_attention.LinearAttention for the
-    general concept of replacing the softmax with feature maps. In addition to
-    that, we also make use of the fact that causal masking is a triangular mask
-    which allows us to apply the masking and still compute the attention in O(N
-    D^2) complexity.
+    Cumulative key and key-value sums restrict each query to its current
+    position and preceding positions, following Equations 9-12.
 
-    Arguments
-    ---------
-        feature_map: callable, a callable that applies the feature map to the
-                     last dimension of a tensor (default: elu(x)+1)
-        eps: float, a small number to ensure the numerical stability of the
-             denominator (default: 1e-6)
+    Args:
+        feature_map (Callable[[Tensor], Tensor] | None): Function applied to
+            query and key tensors. When None, defaults to ELU(x) + 1 from
+            Equation 7.
+        eps (float): Small value added to the normalization denominator for
+            numerical stability.
+
+    Attributes:
+        feature_map (Callable[[Tensor], Tensor]): Configured feature-map
+            function.
+        eps (float): Value added to the normalization denominator.
     """
 
     def __init__(
