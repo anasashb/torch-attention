@@ -43,8 +43,13 @@ except ImportError:
 
 
 class CausalDotProduct(torch.autograd.Function):
-    """Compute the weighted sum of values but attending only to previous
-    values."""
+    """
+    Computes the unnormalized weighted sum of values for causal Linear Attention.
+
+    For each position, the compiled CPU or CUDA function applies the mapped
+    query to the prefix key-value sum from Equation 10. Its forward and
+    backward computations follow Algorithm 1 of *Transformers are RNNs*.
+    """
 
     dot = {"cpu": causal_dot_product_cpu, "cuda": causal_dot_product_cuda}
     dot_backward = {
