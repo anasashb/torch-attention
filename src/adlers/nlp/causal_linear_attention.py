@@ -11,6 +11,12 @@
 # Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>,
 # Apoorv Vyas <avyas@idiap.ch>
 #
+# Paper:
+# Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention
+# https://proceedings.mlr.press/v119/katharopoulos20a.html
+#
+# Equation references below refer to this paper.
+#
 
 """Implement causally masked linear attention."""
 
