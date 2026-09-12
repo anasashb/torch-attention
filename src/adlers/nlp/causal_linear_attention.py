@@ -133,15 +133,11 @@ def causal_linear(
     Returns:
         Tensor: The unnormalized weighted value sums.
     """
-    mapped_query = mapped_query.permute(0, 2, 1, 3).contiguous()
-    mapped_key = mapped_key.permute(0, 2, 1, 3).contiguous()
-    value = value.permute(0, 2, 1, 3).contiguous()
-    unnormalized_attn_output = causal_dot_product(
-        mapped_query,
-        mapped_key,
-        value,
+    return causal_dot_product(
+        mapped_query.contiguous(),
+        mapped_key.contiguous(),
+        value.contiguous(),
     )
-    return unnormalized_attn_output.permute(0, 2, 1, 3).contiguous()
 
 
 class CausalLinearAttention(Module):
@@ -182,25 +178,25 @@ class CausalLinearAttention(Module):
     ) -> tuple[Tensor, Tensor]:
         """Either slice or pad K in case that the sizes do not match between Q
         and K."""
-        batch_size, num_queries, num_heads, head_dim = mapped_query.shape
-        _, num_keys, _, _ = mapped_key.shape
+        batch_size, num_heads, num_queries, head_dim = mapped_query.shape
+        _, _, num_keys, _ = mapped_key.shape
         if num_queries == num_keys:
             return mapped_query, mapped_key
 
         if num_queries < num_keys:
-            return mapped_query, mapped_key[:, :num_queries, :, :]
+            return mapped_query, mapped_key[:, :, :num_queries, :]
 
         return mapped_query, torch.cat(
             [
                 mapped_key,
                 mapped_key.new_zeros(
                     batch_size,
-                    num_queries - num_keys,
                     num_heads,
+                    num_queries - num_keys,
                     head_dim,
                 ),
             ],
-            dim=1,
+            dim=2,
         )
 
     def forward(
@@ -223,7 +219,7 @@ class CausalLinearAttention(Module):
                 "CausalLinearAttention only supports full "
                 "lower triangular masks"
             )
-        mapped_key = mapped_key * key_lengths.float_matrix[:, :, None, None]
+        mapped_key = mapped_key * key_lengths.float_matrix[:, None, :, None]
 
         # Ensure that Q and K have compatible sizes for the following
         # computations, namely L == S
@@ -235,9 +231,9 @@ class CausalLinearAttention(Module):
         # Invert the denominator from Equation 12 for the final multiplication
         normalization_factor = 1 / (
             torch.einsum(
-                "nlhi,nlhi->nlh",
+                "bhld,bhld->bhl",
                 mapped_query,
-                mapped_key.cumsum(1),
+                mapped_key.cumsum(dim=-2),
             )
             + self.eps
         )
