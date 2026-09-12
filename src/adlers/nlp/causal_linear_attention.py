@@ -175,12 +175,10 @@ class CausalLinearAttention(Module):
                 dim=1,
             )
 
-    def forward(
-        self, queries, keys, values, attn_mask, query_lengths, key_lengths
-    ):
+    def forward(self, query, key, value, attn_mask, query_lengths, key_lengths):
         # Apply the feature map to the queries and keys
-        mapped_query = self.feature_map(queries)
-        mapped_key = self.feature_map(keys)
+        mapped_query = self.feature_map(query)
+        mapped_key = self.feature_map(key)
 
         # Apply the key padding mask and make sure the attn_mask is a
         # lower triangular causal mask
@@ -217,7 +215,7 @@ class CausalLinearAttention(Module):
         unnormalized_attn_output = causal_linear(
             mapped_query,
             mapped_key,
-            values,
+            value,
         )
 
         return unnormalized_attn_output * normalization_factor[:, :, :, None]
