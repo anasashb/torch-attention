@@ -166,19 +166,18 @@ class CausalLinearAttention(Module):
         if num_queries < num_keys:
             return mapped_query, mapped_key[:, :num_queries, :, :]
 
-        if num_queries > num_keys:
-            return mapped_query, torch.cat(
-                [
-                    mapped_key,
-                    mapped_key.new_zeros(
-                        batch_size,
-                        num_queries - num_keys,
-                        num_heads,
-                        head_dim,
-                    ),
-                ],
-                dim=1,
-            )
+        return mapped_query, torch.cat(
+            [
+                mapped_key,
+                mapped_key.new_zeros(
+                    batch_size,
+                    num_queries - num_keys,
+                    num_heads,
+                    head_dim,
+                ),
+            ],
+            dim=1,
+        )
 
     def forward(
         self,
