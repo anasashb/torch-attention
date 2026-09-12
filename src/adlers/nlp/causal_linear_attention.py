@@ -122,6 +122,17 @@ def causal_linear(
     mapped_key: Tensor,
     value: Tensor,
 ) -> Tensor:
+    """
+    Computes unnormalized weighted value sums for causal Linear Attention.
+
+    Args:
+        mapped_query (Tensor): Feature-mapped query tensor.
+        mapped_key (Tensor): Feature-mapped key tensor.
+        value (Tensor): Value tensor.
+
+    Returns:
+        Tensor: The unnormalized weighted value sums.
+    """
     mapped_query = mapped_query.permute(0, 2, 1, 3).contiguous()
     mapped_key = mapped_key.permute(0, 2, 1, 3).contiguous()
     value = value.permute(0, 2, 1, 3).contiguous()
