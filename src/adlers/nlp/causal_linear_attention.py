@@ -179,8 +179,8 @@ class CausalLinearAttention(Module):
         self, queries, keys, values, attn_mask, query_lengths, key_lengths
     ):
         # Apply the feature map to the queries and keys
-        Q = self.feature_map(queries)
-        K = self.feature_map(keys)
+        mapped_query = self.feature_map(queries)
+        mapped_key = self.feature_map(keys)
 
         # Apply the key padding mask and make sure the attn_mask is a
         # lower triangular causal mask
@@ -189,11 +189,14 @@ class CausalLinearAttention(Module):
                 "CausalLinearAttention only supports full "
                 "lower triangular masks"
             )
-        K = K * key_lengths.float_matrix[:, :, None, None]
+        mapped_key = mapped_key * key_lengths.float_matrix[:, :, None, None]
 
         # Ensure that Q and K have compatible sizes for the following
         # computations, namely L == S
-        Q, K = self._make_sizes_compatible(Q, K)
+        mapped_query, mapped_key = self._make_sizes_compatible(
+            mapped_query,
+            mapped_key,
+        )
 
         # TODO: Shall we divide the Q and K with a relatively large number to
         #       avoid numerical instabilities in computing the denominator?
@@ -201,9 +204,20 @@ class CausalLinearAttention(Module):
         #       that seems relatively costly for a simple normalization.
 
         # Compute the normalizers
-        Z = 1 / (torch.einsum("nlhi,nlhi->nlh", Q, K.cumsum(1)) + self.eps)
+        normalization_factor = 1 / (
+            torch.einsum(
+                "nlhi,nlhi->nlh",
+                mapped_query,
+                mapped_key.cumsum(1),
+            )
+            + self.eps
+        )
 
         # Compute the unnormalized result
-        V = causal_linear(Q, K, values)
+        unnormalized_attn_output = causal_linear(
+            mapped_query,
+            mapped_key,
+            values,
+        )
 
-        return V * Z[:, :, :, None]
+        return unnormalized_attn_output * normalization_factor[:, :, :, None]
