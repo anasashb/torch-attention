@@ -204,21 +204,10 @@ class CausalLinearAttention(Module):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        attn_mask: Any,
-        key_lengths: Any,
     ) -> Tensor:
         # Apply the feature map to the queries and keys (Equation 7)
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
-
-        # Apply the key padding mask and make sure the attn_mask is a
-        # lower triangular causal mask
-        if not attn_mask.lower_triangular:
-            raise RuntimeError(
-                "CausalLinearAttention only supports full "
-                "lower triangular masks"
-            )
-        mapped_key = mapped_key * key_lengths.float_matrix[:, None, :, None]
 
         # Ensure that Q and K have compatible sizes for the following
         # computations, namely L == S
