@@ -21,3 +21,25 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     ).repeat(1, 3, 1, 1)
     torch.testing.assert_close(actual=output, expected=expected_output)
     assert output.is_contiguous()
+
+
+def test_causal_linear_attention_applies_key_padding_mask() -> None:
+    """Checks that padded keys do not contribute to causal attention."""
+    query = torch.zeros((1, 1, 2, 1))
+    key = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
+    attn_mask = torch.tensor([[[[False, True]]]])
+    attention = CausalLinearAttention(
+        feature_map=torch.ones_like,
+        eps=0.0,
+    )
+
+    output = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=attn_mask,
+    )
+
+    expected_output = torch.tensor([[[[2.0], [2.0]]]])
+    torch.testing.assert_close(actual=output, expected=expected_output)
