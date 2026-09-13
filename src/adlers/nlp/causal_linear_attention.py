@@ -27,6 +27,8 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
+from adlers.shared._attention_base import AttentionBase
+
 from .causal_product_cpu import causal_dot_backward as causal_dot_backward_cpu
 from .causal_product_cpu import causal_dot_product as causal_dot_product_cpu
 from .linear_attention import _elu_feature_map
@@ -211,6 +213,7 @@ class CausalLinearAttention(Module):
         mapped_key = self.feature_map(key)
 
         if attn_mask is not None:
+            AttentionBase._validate_attn_mask_dtype(attn_mask=attn_mask)
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
