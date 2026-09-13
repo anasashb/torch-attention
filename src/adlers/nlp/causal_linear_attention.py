@@ -204,10 +204,15 @@ class CausalLinearAttention(Module):
         query: Tensor,
         key: Tensor,
         value: Tensor,
+        attn_mask: Tensor | None = None,
     ) -> Tensor:
         # Apply the feature map to the queries and keys (Equation 7)
         mapped_query = self.feature_map(query)
         mapped_key = self.feature_map(key)
+
+        if attn_mask is not None:
+            key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
+            mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
         # Ensure that Q and K have compatible sizes for the following
         # computations, namely L == S
