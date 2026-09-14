@@ -68,3 +68,25 @@ def test_causal_linear_attention_rejects_non_boolean_key_padding_masks() -> (
         "with True for positions that should be masked out and "
         "False for positions that can be attended to."
     )
+
+
+def test_causal_linear_attention_rejects_query_dependent_attention_masks() -> (
+    None
+):
+    """Checks that causal Linear Attention rejects query-dependent masks."""
+    query = torch.zeros((1, 1, 2, 2))
+    attn_mask = torch.zeros((2, 2), dtype=torch.bool)
+    attention = CausalLinearAttention()
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=query,
+            value=query,
+            attn_mask=attn_mask,
+        )
+
+    assert str(error.value) == (
+        "Linear attention only supports key-padding masks shaped "
+        "[batch_size, 1, 1, num_keys]; got shape (2, 2)."
+    )
