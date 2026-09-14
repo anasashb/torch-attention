@@ -214,6 +214,19 @@ class CausalLinearAttention(Module):
 
         if attn_mask is not None:
             AttentionBase._validate_attn_mask_dtype(attn_mask=attn_mask)
+            expected_mask_shape = (
+                query.shape[0],
+                1,
+                1,
+                key.shape[-2],
+            )
+            if attn_mask.shape != expected_mask_shape:
+                raise ValueError(
+                    "Linear attention only supports key-padding masks shaped "
+                    "[batch_size, 1, 1, num_keys]; "
+                    f"got shape {tuple(attn_mask.shape)}."
+                )
+
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
