@@ -213,6 +213,16 @@ class CausalLinearAttention(Module):
             key=key,
             value=value,
         )
+        AttentionBase._validate_qkv_batch_sizes(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qkv_head_counts(
+            query=query,
+            key=key,
+            value=value,
+        )
 
         # Apply the feature map to the queries and keys (Equation 7)
         mapped_query = self.feature_map(query)
