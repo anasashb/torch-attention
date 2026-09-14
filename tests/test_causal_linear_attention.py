@@ -25,7 +25,9 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     assert output.is_contiguous()
 
 
+@pytest.mark.parametrize("value_head_dim", [6, 4])
 def test_causal_linear_attention_matches_explicit_attention_calculation(
+    value_head_dim: int,
     make_qkv: MakeQKV,
 ) -> None:
     """Checks causal Linear Attention against an explicit score matrix."""
@@ -36,6 +38,7 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
         num_keys=3,
         head_dim=6,
     )
+    value = value[..., :value_head_dim]
     eps = 1e-6
     attention = CausalLinearAttention(eps=eps)
 
