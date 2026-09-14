@@ -284,3 +284,31 @@ def test_causal_linear_attention_rejects_unequal_key_and_value_lengths(
         "got key length 3 and value length 4. "
         "Provide one value position for each key position."
     )
+
+
+def test_causal_linear_attention_rejects_different_query_and_key_lengths(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that causal query, key, and value lengths must match."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+        head_dim=6,
+    )
+    attention = CausalLinearAttention()
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Query, key, and value sequence lengths must match for causal "
+        "linear attention; got query length 3, key length 5, and "
+        "value length 5. Use the same sequence length for all three tensors."
+    )
