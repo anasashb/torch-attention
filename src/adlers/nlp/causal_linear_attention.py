@@ -179,7 +179,7 @@ class CausalLinearAttention(Module):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> Tensor:
+    ) -> tuple[Tensor, Tensor | None]:
         AttentionBase._validate_qkv_rank(
             query=query,
             key=key,
@@ -254,4 +254,7 @@ class CausalLinearAttention(Module):
             value,
         )
 
-        return unnormalized_attn_output * normalization_factor[:, :, :, None]
+        attn_output = (
+            unnormalized_attn_output * normalization_factor[:, :, :, None]
+        )
+        return attn_output, None
