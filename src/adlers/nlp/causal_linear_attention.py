@@ -173,34 +173,6 @@ class CausalLinearAttention(Module):
         )
         self.eps = eps
 
-    def _make_sizes_compatible(
-        self,
-        mapped_query: Tensor,
-        mapped_key: Tensor,
-    ) -> tuple[Tensor, Tensor]:
-        """Either slice or pad K in case that the sizes do not match between Q
-        and K."""
-        batch_size, num_heads, num_queries, head_dim = mapped_query.shape
-        _, _, num_keys, _ = mapped_key.shape
-        if num_queries == num_keys:
-            return mapped_query, mapped_key
-
-        if num_queries < num_keys:
-            return mapped_query, mapped_key[:, :, :num_queries, :]
-
-        return mapped_query, torch.cat(
-            [
-                mapped_key,
-                mapped_key.new_zeros(
-                    batch_size,
-                    num_heads,
-                    num_queries - num_keys,
-                    head_dim,
-                ),
-            ],
-            dim=2,
-        )
-
     def forward(
         self,
         query: Tensor,
@@ -264,13 +236,6 @@ class CausalLinearAttention(Module):
 
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
-
-        # Ensure that Q and K have compatible sizes for the following
-        # computations, namely L == S
-        mapped_query, mapped_key = self._make_sizes_compatible(
-            mapped_query,
-            mapped_key,
-        )
 
         # Invert the denominator from Equation 12 for the final multiplication
         normalization_factor = 1 / (
