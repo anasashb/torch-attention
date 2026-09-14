@@ -231,6 +231,17 @@ class CausalLinearAttention(Module):
             key=key,
             value=value,
         )
+        num_queries = query.shape[-2]
+        num_keys = key.shape[-2]
+        num_values = value.shape[-2]
+        if not (num_queries == num_keys == num_values):
+            raise ValueError(
+                "Query, key, and value sequence lengths must match for causal "
+                "linear attention; "
+                f"got query length {num_queries}, key length {num_keys}, and "
+                f"value length {num_values}. Use the same sequence length for "
+                "all three tensors."
+            )
 
         # Apply the feature map to the queries and keys (Equation 7)
         mapped_query = self.feature_map(query)
