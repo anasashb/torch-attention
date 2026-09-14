@@ -25,6 +25,44 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     assert output.is_contiguous()
 
 
+def test_causal_linear_attention_matches_explicit_attention_calculation(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks causal Linear Attention against an explicit score matrix."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    eps = 1e-6
+    attention = CausalLinearAttention(eps=eps)
+
+    output = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    mapped_query = torch.nn.functional.elu(input=query) + 1
+    mapped_key = torch.nn.functional.elu(input=key) + 1
+    scores = mapped_query @ mapped_key.transpose(dim0=-2, dim1=-1)
+    causal_mask = torch.triu(
+        torch.ones(
+            size=(query.shape[-2], key.shape[-2]),
+            dtype=torch.bool,
+        ),
+        diagonal=1,
+    )
+    scores = scores.masked_fill(mask=causal_mask, value=0)
+    weights = scores / (scores.sum(dim=-1, keepdim=True) + eps)
+    expected_output = weights @ value
+
+    torch.testing.assert_close(actual=output, expected=expected_output)
+
+
 def test_causal_linear_attention_applies_key_padding_mask() -> None:
     """Checks that padded keys do not contribute to causal attention."""
     query = torch.zeros((1, 1, 2, 1))
