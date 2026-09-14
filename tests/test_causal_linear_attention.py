@@ -214,3 +214,32 @@ def test_causal_linear_attention_rejects_mismatched_query_and_key_dimensions(
         "got query head dimension 6 and key head dimension 5. "
         "Use the same head dimension for both tensors."
     )
+
+
+def test_causal_linear_attention_rejects_unequal_key_and_value_lengths(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that each key position must have a corresponding value."""
+    query, key, _ = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    value = torch.zeros((2, 4, 4, 6))
+    attention = CausalLinearAttention()
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Key and value sequence lengths must match; "
+        "got key length 3 and value length 4. "
+        "Provide one value position for each key position."
+    )
