@@ -80,6 +80,38 @@ class LinearAttention(Module):
         )
         self.eps = eps
 
+    def _attend_non_causal(
+        self,
+        mapped_query: Tensor,
+        mapped_key: Tensor,
+        value: Tensor,
+    ) -> Tensor:
+        """Computes non-causal attention from mapped queries and keys."""
+        # Compute phi(K)^T V first (right-hand side of Equation 6)
+        key_value_product = torch.einsum(
+            "bhsd,bhsm->bhmd",
+            mapped_key,
+            value,
+        )
+
+        # Invert the denominator from Equation 5 for the final multiplication
+        normalization_factor = 1 / (
+            torch.einsum(
+                "bhld,bhd->bhl",
+                mapped_query,
+                mapped_key.sum(dim=-2),
+            )
+            + self.eps
+        )
+
+        # Apply the shared key-value product to every query (Equations 5-6)
+        return torch.einsum(
+            "bhld,bhmd,bhl->bhlm",
+            mapped_query,
+            key_value_product,
+            normalization_factor,
+        )
+
     def forward(
         self,
         query: Tensor,
@@ -156,29 +188,10 @@ class LinearAttention(Module):
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
-        # Compute phi(K)^T V first (right-hand side of Equation 6)
-        key_value_product = torch.einsum(
-            "bhsd,bhsm->bhmd",
-            mapped_key,
-            value,
-        )
-
-        # Invert the denominator from Equation 5 for the final multiplication
-        normalization_factor = 1 / (
-            torch.einsum(
-                "bhld,bhd->bhl",
-                mapped_query,
-                mapped_key.sum(dim=-2),
-            )
-            + self.eps
-        )
-
-        # Apply the shared key-value product to every query (Equations 5-6)
-        attn_output = torch.einsum(
-            "bhld,bhmd,bhl->bhlm",
-            mapped_query,
-            key_value_product,
-            normalization_factor,
+        attn_output = self._attend_non_causal(
+            mapped_query=mapped_query,
+            mapped_key=mapped_key,
+            value=value,
         )
 
         return attn_output.contiguous(), None
