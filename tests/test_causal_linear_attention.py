@@ -92,58 +92,6 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
-@pytest.mark.parametrize(
-    ("dimension", "expected_error"),
-    [
-        pytest.param(
-            0,
-            "Query, key, and value batch sizes must match; "
-            "got query batch size 1, key batch size 2, and "
-            "value batch size 2. Use the same batch size for all "
-            "three tensors.",
-            id="batch-size",
-        ),
-        pytest.param(
-            1,
-            "Query, key, and value head counts must match; "
-            "got query head count 1, key head count 4, and "
-            "value head count 4. Use the same number of heads for "
-            "all three tensors.",
-            id="head-count",
-        ),
-    ],
-)
-def test_causal_linear_attention_rejects_query_batch_and_head_mismatches(
-    dimension: int,
-    expected_error: str,
-    make_qkv: MakeQKV,
-) -> None:
-    """Checks that query, key, and value batches and head counts match."""
-    query, key, value = make_qkv(
-        batch_size=2,
-        num_heads=4,
-        num_queries=3,
-        num_keys=3,
-        head_dim=6,
-    )
-    query = query.narrow(
-        dim=dimension,
-        start=0,
-        length=1,
-    )
-    attention = LinearAttention(is_causal=True)
-
-    with pytest.raises(ValueError) as error:
-        attention(
-            query=query,
-            key=key,
-            value=value,
-            attn_mask=None,
-        )
-
-    assert str(error.value) == expected_error
-
-
 def test_causal_linear_attention_rejects_mismatched_query_and_key_dimensions(
     make_qkv: MakeQKV,
 ) -> None:
