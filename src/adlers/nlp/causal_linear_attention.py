@@ -173,6 +173,32 @@ class CausalLinearAttention(Module):
         )
         self.eps = eps
 
+    def _attend_causal(
+        self,
+        mapped_query: Tensor,
+        mapped_key: Tensor,
+        value: Tensor,
+    ) -> Tensor:
+        """Computes causal attention from mapped queries and keys."""
+        # Invert the denominator from Equation 12 for the final multiplication
+        normalization_factor = 1 / (
+            torch.einsum(
+                "bhld,bhld->bhl",
+                mapped_query,
+                mapped_key.cumsum(dim=-2),
+            )
+            + self.eps
+        )
+
+        # Compute the numerator from Equation 12
+        unnormalized_attn_output = causal_linear(
+            mapped_query,
+            mapped_key,
+            value,
+        )
+
+        return unnormalized_attn_output * normalization_factor[:, :, :, None]
+
     def forward(
         self,
         query: Tensor,
@@ -237,24 +263,9 @@ class CausalLinearAttention(Module):
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
-        # Invert the denominator from Equation 12 for the final multiplication
-        normalization_factor = 1 / (
-            torch.einsum(
-                "bhld,bhld->bhl",
-                mapped_query,
-                mapped_key.cumsum(dim=-2),
-            )
-            + self.eps
-        )
-
-        # Compute the numerator from Equation 12
-        unnormalized_attn_output = causal_linear(
-            mapped_query,
-            mapped_key,
-            value,
-        )
-
-        attn_output = (
-            unnormalized_attn_output * normalization_factor[:, :, :, None]
+        attn_output = self._attend_causal(
+            mapped_query=mapped_query,
+            mapped_key=mapped_key,
+            value=value,
         )
         return attn_output, None
