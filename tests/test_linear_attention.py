@@ -164,11 +164,14 @@ def test_linear_attention_rejects_nonzero_dropout_rate() -> None:
     )
 
 
-def test_linear_attention_rejects_non_boolean_key_padding_masks() -> None:
+@pytest.mark.parametrize("is_causal", [False, True])
+def test_linear_attention_rejects_non_boolean_key_padding_masks(
+    is_causal: bool,
+) -> None:
     """Checks that LinearAttention requires boolean key-padding masks."""
     query = torch.zeros(size=(1, 1, 2, 2))
     attn_mask = torch.zeros(size=(1, 1, 1, 2), dtype=torch.float32)
-    attention = LinearAttention()
+    attention = LinearAttention(is_causal=is_causal)
 
     with pytest.raises(TypeError) as error:
         attention(
