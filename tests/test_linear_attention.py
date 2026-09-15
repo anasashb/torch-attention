@@ -122,11 +122,14 @@ def test_linear_attention_applies_key_padding_mask() -> None:
     torch.testing.assert_close(output, torch.tensor([[[[2.0]]]]))
 
 
-def test_linear_attention_rejects_query_dependent_attention_masks() -> None:
+@pytest.mark.parametrize("is_causal", [False, True])
+def test_linear_attention_rejects_query_dependent_attention_masks(
+    is_causal: bool,
+) -> None:
     """Checks that LinearAttention rejects query-dependent masks."""
     query = torch.zeros((1, 1, 2, 2))
     attn_mask = torch.zeros((2, 2), dtype=torch.bool)
-    attention = LinearAttention()
+    attention = LinearAttention(is_causal=is_causal)
 
     with pytest.raises(ValueError) as error:
         attention(
