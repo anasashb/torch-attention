@@ -25,9 +25,8 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
+from adlers.nlp.causal_linear_attention import causal_linear
 from adlers.shared._attention_base import AttentionBase
-
-from .causal_linear_attention import causal_linear
 
 
 def _elu_feature_map(tensor: Tensor) -> Tensor:
