@@ -40,6 +40,7 @@ class LinearAttention(Module):
     avoids constructing the full query-key attention matrix.
 
     Args:
+        is_causal (bool): Whether queries can attend to future positions.
         feature_map (Callable[[Tensor], Tensor] | None): Function applied to
             query and key tensors. When None, defaults to ELU(x) + 1 from
             Equation 7.
@@ -50,6 +51,7 @@ class LinearAttention(Module):
             Only False is supported.
 
     Attributes:
+        is_causal (bool): Whether causal attention is enabled.
         feature_map (Callable[[Tensor], Tensor]): Configured feature-map
             function.
         eps (float): Value added to the normalization denominator.
@@ -57,6 +59,7 @@ class LinearAttention(Module):
 
     def __init__(
         self,
+        is_causal: bool = False,
         feature_map: Callable[[Tensor], Tensor] | None = None,
         eps: float = 1e-6,
         dropout_rate: float = 0.0,
@@ -75,6 +78,7 @@ class LinearAttention(Module):
             )
 
         super().__init__()
+        self.is_causal = is_causal
         self.feature_map = (
             feature_map if feature_map is not None else _elu_feature_map
         )
@@ -112,6 +116,30 @@ class LinearAttention(Module):
             normalization_factor,
         )
 
+    def _attend_causal(
+        self,
+        mapped_query: Tensor,
+        mapped_key: Tensor,
+        value: Tensor,
+    ) -> Tensor:
+        """Computes causal attention from mapped queries and keys."""
+        from .causal_linear_attention import causal_linear
+
+        normalization_factor = 1 / (
+            torch.einsum(
+                "bhld,bhld->bhl",
+                mapped_query,
+                mapped_key.cumsum(dim=-2),
+            )
+            + self.eps
+        )
+        unnormalized_attn_output = causal_linear(
+            mapped_query,
+            mapped_key,
+            value,
+        )
+        return unnormalized_attn_output * normalization_factor[:, :, :, None]
+
     def forward(
         self,
         query: Tensor,
@@ -120,7 +148,7 @@ class LinearAttention(Module):
         attn_mask: Tensor | None = None,
     ) -> tuple[Tensor, None]:
         """
-        Computes non-causal Linear Attention.
+        Computes Linear Attention.
 
         Args:
             query (Tensor): Query tensor of shape [batch_size, num_heads,
@@ -165,6 +193,18 @@ class LinearAttention(Module):
             key=key,
             value=value,
         )
+        if self.is_causal:
+            num_queries = query.shape[-2]
+            num_keys = key.shape[-2]
+            num_values = value.shape[-2]
+            if not (num_queries == num_keys == num_values):
+                raise ValueError(
+                    "Query, key, and value sequence lengths must match for "
+                    "causal linear attention; "
+                    f"got query length {num_queries}, key length {num_keys}, "
+                    f"and value length {num_values}. Use the same sequence "
+                    "length for all three tensors."
+                )
 
         # Map queries and keys into feature space (Equation 4)
         mapped_query = self.feature_map(query)
@@ -188,10 +228,17 @@ class LinearAttention(Module):
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
-        attn_output = self._attend_non_causal(
-            mapped_query=mapped_query,
-            mapped_key=mapped_key,
-            value=value,
-        )
+        if self.is_causal:
+            attn_output = self._attend_causal(
+                mapped_query=mapped_query,
+                mapped_key=mapped_key,
+                value=value,
+            )
+        else:
+            attn_output = self._attend_non_causal(
+                mapped_query=mapped_query,
+                mapped_key=mapped_key,
+                value=value,
+            )
 
         return attn_output.contiguous(), None
