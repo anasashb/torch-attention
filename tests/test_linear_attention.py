@@ -236,6 +236,7 @@ def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
     )
 
 
+@pytest.mark.parametrize("is_causal", [False, True])
 @pytest.mark.parametrize(
     ("dimension", "dimension_name", "expected_guidance"),
     [
@@ -262,6 +263,7 @@ def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
     ],
 )
 def test_linear_attention_rejects_mismatched_qkv_batch_sizes_and_head_counts(
+    is_causal: bool,
     tensor_index: int,
     dimension: int,
     dimension_name: str,
@@ -274,7 +276,7 @@ def test_linear_attention_rejects_mismatched_qkv_batch_sizes_and_head_counts(
             batch_size=2,
             num_heads=4,
             num_queries=3,
-            num_keys=5,
+            num_keys=3,
             head_dim=6,
         )
     )
@@ -284,7 +286,7 @@ def test_linear_attention_rejects_mismatched_qkv_batch_sizes_and_head_counts(
         length=1,
     )
     query, key, value = tensors
-    attention = LinearAttention()
+    attention = LinearAttention(is_causal=is_causal)
 
     with pytest.raises(ValueError) as error:
         attention(
