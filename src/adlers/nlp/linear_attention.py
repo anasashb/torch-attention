@@ -1,5 +1,6 @@
 # Adapted from fast-transformers:
 # https://github.com/idiap/fast-transformers/blob/2ad36b97e64cb93862937bd21fcc9568d989561f/fast_transformers/attention/linear_attention.py
+# https://github.com/idiap/fast-transformers/blob/2ad36b97e64cb93862937bd21fcc9568d989561f/fast_transformers/attention/causal_linear_attention.py
 #
 # Licensed under the MIT License.
 # This file has been modified for ADLERS.
@@ -25,6 +26,8 @@ from torch import Tensor
 from torch.nn import Module
 
 from adlers.shared._attention_base import AttentionBase
+
+from .causal_linear_attention import causal_linear
 
 
 def _elu_feature_map(tensor: Tensor) -> Tensor:
@@ -123,8 +126,6 @@ class LinearAttention(Module):
         value: Tensor,
     ) -> Tensor:
         """Computes causal attention from mapped queries and keys."""
-        from .causal_linear_attention import causal_linear
-
         normalization_factor = 1 / (
             torch.einsum(
                 "bhld,bhld->bhl",
