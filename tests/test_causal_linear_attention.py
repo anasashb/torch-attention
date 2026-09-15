@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from adlers.nlp.causal_linear_attention import CausalLinearAttention
+from adlers.nlp.linear_attention import LinearAttention
 from tests._typing import MakeQKV
 
 
@@ -10,7 +10,7 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     query = torch.tensor([[[[1.0, -1.0], [-1.0, 1.0]]]]).repeat(1, 3, 1, 1)
     key = torch.tensor([[[[1.0, 0.0], [0.0, 1.0]]]]).repeat(1, 3, 1, 1)
     value = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]]).repeat(1, 3, 1, 1)
-    attention = CausalLinearAttention(eps=1e-6)
+    attention = LinearAttention(is_causal=True, eps=1e-6)
 
     output, attn_weights = attention(
         query=query,
@@ -41,7 +41,7 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
     )
     value = value[..., :value_head_dim]
     eps = 1e-6
-    attention = CausalLinearAttention(eps=eps)
+    attention = LinearAttention(is_causal=True, eps=eps)
 
     output, attn_weights = attention(
         query=query,
@@ -74,7 +74,8 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
     key = torch.zeros((1, 1, 2, 1))
     value = torch.tensor([[[[2.0], [4.0]]]])
     attn_mask = torch.tensor([[[[False, True]]]])
-    attention = CausalLinearAttention(
+    attention = LinearAttention(
+        is_causal=True,
         feature_map=torch.ones_like,
         eps=0.0,
     )
@@ -97,7 +98,7 @@ def test_causal_linear_attention_rejects_non_boolean_key_padding_masks() -> (
     """Checks that causal Linear Attention requires boolean masks."""
     query = torch.zeros((1, 1, 2, 2))
     attn_mask = torch.zeros((1, 1, 1, 2), dtype=torch.float32)
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(TypeError) as error:
         attention(
@@ -121,7 +122,7 @@ def test_causal_linear_attention_rejects_query_dependent_attention_masks() -> (
     """Checks that causal Linear Attention rejects query-dependent masks."""
     query = torch.zeros((1, 1, 2, 2))
     attn_mask = torch.zeros((2, 2), dtype=torch.bool)
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(ValueError) as error:
         attention(
@@ -162,7 +163,7 @@ def test_causal_linear_attention_rejects_non_four_dimensional_qkv_tensors(
     )
     tensors[tensor_index] = tensors[tensor_index].squeeze(dim=1)
     query, key, value = tensors
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(ValueError) as error:
         attention(
@@ -218,7 +219,7 @@ def test_causal_linear_attention_rejects_query_batch_and_head_mismatches(
         start=0,
         length=1,
     )
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(ValueError) as error:
         attention(
@@ -243,7 +244,7 @@ def test_causal_linear_attention_rejects_mismatched_query_and_key_dimensions(
         head_dim=6,
     )
     key = torch.zeros((2, 4, 3, 5))
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(ValueError) as error:
         attention(
@@ -272,7 +273,7 @@ def test_causal_linear_attention_rejects_unequal_key_and_value_lengths(
         head_dim=6,
     )
     value = torch.zeros((2, 4, 4, 6))
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(ValueError) as error:
         attention(
@@ -300,7 +301,7 @@ def test_causal_linear_attention_rejects_different_query_and_key_lengths(
         num_keys=5,
         head_dim=6,
     )
-    attention = CausalLinearAttention()
+    attention = LinearAttention(is_causal=True)
 
     with pytest.raises(ValueError) as error:
         attention(
