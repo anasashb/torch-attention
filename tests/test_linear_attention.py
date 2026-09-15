@@ -26,6 +26,29 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     torch.testing.assert_close(output, expected_output)
 
 
+def test_linear_attention_applies_causal_attention() -> None:
+    """Checks that causal mode excludes future key-value positions."""
+    query = torch.zeros((1, 1, 2, 1))
+    key = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
+    attention = LinearAttention(
+        feature_map=torch.ones_like,
+        eps=0.0,
+        is_causal=True,
+    )
+
+    output, attn_weights = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    expected_output = torch.tensor([[[[2.0], [3.0]]]])
+    assert attn_weights is None
+    torch.testing.assert_close(actual=output, expected=expected_output)
+
+
 @pytest.mark.parametrize(
     ("num_queries", "num_keys", "value_head_dim"),
     [(3, 3, 6), (3, 5, 4)],
