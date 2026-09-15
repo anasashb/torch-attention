@@ -192,6 +192,7 @@ def test_linear_attention_rejects_non_boolean_key_padding_masks(
     )
 
 
+@pytest.mark.parametrize("is_causal", [False, True])
 @pytest.mark.parametrize(
     ("tensor_name", "tensor_index"),
     [
@@ -201,6 +202,7 @@ def test_linear_attention_rejects_non_boolean_key_padding_masks(
     ],
 )
 def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
+    is_causal: bool,
     tensor_name: str,
     tensor_index: int,
     make_qkv: MakeQKV,
@@ -217,7 +219,7 @@ def test_linear_attention_rejects_non_four_dimensional_qkv_tensors(
     )
     tensors[tensor_index] = tensors[tensor_index].squeeze(dim=1)
     query, key, value = tensors
-    attention = LinearAttention()
+    attention = LinearAttention(is_causal=is_causal)
 
     with pytest.raises(ValueError) as error:
         attention(
