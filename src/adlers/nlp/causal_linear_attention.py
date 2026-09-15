@@ -24,14 +24,18 @@ from typing import Any
 import torch
 from torch import Tensor
 
-from .causal_product_cpu import causal_dot_backward as causal_dot_backward_cpu
-from .causal_product_cpu import causal_dot_product as causal_dot_product_cpu
+from adlers.nlp.causal_product_cpu import (
+    causal_dot_backward as causal_dot_backward_cpu,
+)
+from adlers.nlp.causal_product_cpu import (
+    causal_dot_product as causal_dot_product_cpu,
+)
 
 try:
-    from .causal_product_cuda import (
+    from adlers.nlp.causal_product_cuda import (
         causal_dot_backward as causal_dot_backward_cuda,
     )
-    from .causal_product_cuda import (
+    from adlers.nlp.causal_product_cuda import (
         causal_dot_product as causal_dot_product_cuda,
     )
 except ImportError:
