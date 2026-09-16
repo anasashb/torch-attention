@@ -20,7 +20,7 @@ Source revision:
 
 The adapted code is located in:
 src/adlers/nlp/linear_attention.py
-src/adlers/nlp/causal_linear_attention.py
+src/adlers/nlp/_causal_product.py
 src/adlers/csrc/causal_product_cpu.cpp
 src/adlers/csrc/cuda/causal_product_cuda.cu
 

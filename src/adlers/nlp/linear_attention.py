@@ -25,7 +25,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
-from adlers.nlp.causal_linear_attention import causal_linear
+from adlers.nlp._causal_product import causal_linear
 from adlers.shared._attention_base import AttentionBase
 
 

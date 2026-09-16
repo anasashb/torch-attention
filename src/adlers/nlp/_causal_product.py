@@ -17,7 +17,7 @@
 # Equation references below refer to this paper.
 #
 
-"""Implement causally masked linear attention."""
+"""Provide the compiled causal product used by Linear Attention."""
 
 from typing import Any
 
