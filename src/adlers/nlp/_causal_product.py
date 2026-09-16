@@ -25,24 +25,24 @@ import torch
 from torch import Tensor
 
 from adlers.nlp.causal_product_cpu import (
-    causal_dot_backward as causal_dot_backward_cpu,
+    causal_dot_backward as _causal_dot_backward_cpu,
 )
 from adlers.nlp.causal_product_cpu import (
-    causal_dot_product as causal_dot_product_cpu,
+    causal_dot_product as _causal_dot_product_cpu,
 )
 
 try:
     from adlers.nlp.causal_product_cuda import (
-        causal_dot_backward as causal_dot_backward_cuda,
+        causal_dot_backward as _causal_dot_backward_cuda,
     )
     from adlers.nlp.causal_product_cuda import (
-        causal_dot_product as causal_dot_product_cuda,
+        causal_dot_product as _causal_dot_product_cuda,
     )
 except ImportError:
-    causal_dot_product_cuda = causal_dot_backward_cuda = None
+    _causal_dot_product_cuda = _causal_dot_backward_cuda = None
 
 
-class CausalDotProduct(torch.autograd.Function):
+class _CausalDotProduct(torch.autograd.Function):
     """
     Computes the unnormalized weighted sum of values for causal Linear Attention.
 
@@ -51,10 +51,13 @@ class CausalDotProduct(torch.autograd.Function):
     backward computations follow Algorithm 1 of *Transformers are RNNs*.
     """
 
-    dot = {"cpu": causal_dot_product_cpu, "cuda": causal_dot_product_cuda}
+    dot = {
+        "cpu": _causal_dot_product_cpu,
+        "cuda": _causal_dot_product_cuda,
+    }
     dot_backward = {
-        "cpu": causal_dot_backward_cpu,
-        "cuda": causal_dot_backward_cuda,
+        "cpu": _causal_dot_backward_cpu,
+        "cuda": _causal_dot_backward_cuda,
     }
 
     @staticmethod
@@ -77,7 +80,7 @@ class CausalDotProduct(torch.autograd.Function):
         )
 
         # Actually perform the dot product
-        CausalDotProduct.dot[device.type](
+        _CausalDotProduct.dot[device.type](
             query.data,
             key.data,
             value.data,
@@ -100,7 +103,7 @@ class CausalDotProduct(torch.autograd.Function):
         value_gradient = torch.zeros_like(value)
 
         # Actually compute the gradients
-        CausalDotProduct.dot_backward[query.device.type](
+        _CausalDotProduct.dot_backward[query.device.type](
             query.data,
             key.data,
             value.data,
@@ -114,10 +117,10 @@ class CausalDotProduct(torch.autograd.Function):
 
 
 # Alias the autograd functions to python style snake case naming
-causal_dot_product = CausalDotProduct.apply
+_causal_dot_product = _CausalDotProduct.apply
 
 
-def causal_linear(
+def _causal_linear(
     mapped_query: Tensor,
     mapped_key: Tensor,
     value: Tensor,
@@ -133,7 +136,7 @@ def causal_linear(
     Returns:
         Tensor: The unnormalized weighted value sums.
     """
-    return causal_dot_product(
+    return _causal_dot_product(
         mapped_query.contiguous(),
         mapped_key.contiguous(),
         value.contiguous(),

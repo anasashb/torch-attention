@@ -25,7 +25,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module
 
-from adlers.nlp._causal_product import causal_linear
+from adlers.nlp._causal_product import _causal_linear
 from adlers.shared._attention_base import AttentionBase
 
 
@@ -133,7 +133,7 @@ class LinearAttention(Module):
             )
             + self.eps
         )
-        unnormalized_attn_output = causal_linear(
+        unnormalized_attn_output = _causal_linear(
             mapped_query,
             mapped_key,
             value,
