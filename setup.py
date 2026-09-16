@@ -8,7 +8,7 @@ from torch.utils.cpp_extension import (
 
 extensions = [
     CppExtension(
-        name="adlers.nlp.causal_product_cpu",
+        name="adlers.nlp._causal_product_cpu",
         sources=["src/adlers/csrc/causal_product_cpu.cpp"],
         extra_compile_args=["-fopenmp", "-ffast-math"],
         extra_link_args=["-fopenmp"],
@@ -18,7 +18,7 @@ extensions = [
 if CUDA_HOME is not None:
     extensions.append(
         CUDAExtension(
-            name="adlers.nlp.causal_product_cuda",
+            name="adlers.nlp._causal_product_cuda",
             sources=["src/adlers/csrc/cuda/causal_product_cuda.cu"],
         )
     )
