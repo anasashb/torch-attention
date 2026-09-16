@@ -330,7 +330,9 @@ def test_linear_attention_rejects_unequal_key_and_value_lengths(
         )
 
 
+@pytest.mark.parametrize("is_causal", [False, True])
 def test_linear_attention_rejects_mismatched_query_and_key_head_dimensions(
+    is_causal: bool,
     make_qkv: MakeQKV,
 ) -> None:
     """Checks that query and key head dimensions must match."""
@@ -338,11 +340,11 @@ def test_linear_attention_rejects_mismatched_query_and_key_head_dimensions(
         batch_size=2,
         num_heads=4,
         num_queries=3,
-        num_keys=5,
+        num_keys=3,
         head_dim=6,
     )
-    key = torch.zeros(size=(2, 4, 5, 5))
-    attention = LinearAttention()
+    key = torch.zeros(size=(2, 4, 3, 5))
+    attention = LinearAttention(is_causal=is_causal)
 
     with pytest.raises(ValueError) as error:
         attention(
