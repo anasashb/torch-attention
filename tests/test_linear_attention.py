@@ -305,29 +305,35 @@ def test_linear_attention_rejects_mismatched_qkv_batch_sizes_and_head_counts(
     )
 
 
+@pytest.mark.parametrize("is_causal", [False, True])
 def test_linear_attention_rejects_unequal_key_and_value_lengths(
+    is_causal: bool,
     make_qkv: MakeQKV,
 ) -> None:
     """Checks that each key position must have a corresponding value."""
-    query, key, value = make_qkv(
+    query, key, _ = make_qkv(
         batch_size=2,
         num_heads=4,
         num_queries=3,
-        num_keys=5,
+        num_keys=3,
+        head_dim=6,
     )
-    value = value[..., :-1, :]
-    attention = LinearAttention()
+    value = torch.zeros((2, 4, 4, 6))
+    attention = LinearAttention(is_causal=is_causal)
 
-    with pytest.raises(
-        ValueError,
-        match="Key and value sequence lengths must match",
-    ):
+    with pytest.raises(ValueError) as error:
         attention(
             query=query,
             key=key,
             value=value,
             attn_mask=None,
         )
+
+    assert str(error.value) == (
+        "Key and value sequence lengths must match; "
+        "got key length 3 and value length 4. "
+        "Provide one value position for each key position."
+    )
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
