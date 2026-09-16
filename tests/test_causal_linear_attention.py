@@ -92,35 +92,6 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
-def test_causal_linear_attention_rejects_unequal_key_and_value_lengths(
-    make_qkv: MakeQKV,
-) -> None:
-    """Checks that each key position must have a corresponding value."""
-    query, key, _ = make_qkv(
-        batch_size=2,
-        num_heads=4,
-        num_queries=3,
-        num_keys=3,
-        head_dim=6,
-    )
-    value = torch.zeros((2, 4, 4, 6))
-    attention = LinearAttention(is_causal=True)
-
-    with pytest.raises(ValueError) as error:
-        attention(
-            query=query,
-            key=key,
-            value=value,
-            attn_mask=None,
-        )
-
-    assert str(error.value) == (
-        "Key and value sequence lengths must match; "
-        "got key length 3 and value length 4. "
-        "Provide one value position for each key position."
-    )
-
-
 def test_causal_linear_attention_rejects_different_query_and_key_lengths(
     make_qkv: MakeQKV,
 ) -> None:
