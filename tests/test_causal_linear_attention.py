@@ -143,3 +143,26 @@ def test_causal_linear_attention_rejects_non_float32_tensors(
         "Causal Linear Attention only supports torch.float32 tensors; "
         f"got query dtype {dtype}, key dtype {dtype}, and value dtype {dtype}."
     )
+
+
+def test_causal_linear_attention_preserves_query_dtype() -> None:
+    """Checks that native output allocation follows the query dtype."""
+    query = torch.zeros(
+        size=(1, 1, 2, 2),
+        dtype=torch.float32,
+    )
+    attention = LinearAttention(is_causal=True)
+    original_default_dtype = torch.get_default_dtype()
+
+    try:
+        torch.set_default_dtype(torch.float64)
+        output, _ = attention(
+            query=query,
+            key=query,
+            value=query,
+            attn_mask=None,
+        )
+    finally:
+        torch.set_default_dtype(original_default_dtype)
+
+    assert output.dtype == query.dtype
