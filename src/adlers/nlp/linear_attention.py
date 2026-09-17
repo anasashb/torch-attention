@@ -125,6 +125,18 @@ class LinearAttention(Module):
         value: Tensor,
     ) -> Tensor:
         """Computes causal attention from mapped queries and keys."""
+        if (
+            mapped_query.dtype != torch.float32
+            or mapped_key.dtype != torch.float32
+            or value.dtype != torch.float32
+        ):
+            raise TypeError(
+                "Causal Linear Attention only supports torch.float32 tensors; "
+                f"got query dtype {mapped_query.dtype}, "
+                f"key dtype {mapped_key.dtype}, and "
+                f"value dtype {value.dtype}."
+            )
+
         normalization_factor = 1 / (
             torch.einsum(
                 "bhld,bhld->bhl",
