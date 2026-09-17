@@ -118,3 +118,28 @@ def test_causal_linear_attention_rejects_different_query_and_key_lengths(
         "linear attention; got query length 3, key length 5, and "
         "value length 5. Use the same sequence length for all three tensors."
     )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [torch.float16, torch.bfloat16, torch.float64],
+)
+def test_causal_linear_attention_rejects_non_float32_tensors(
+    dtype: torch.dtype,
+) -> None:
+    """Checks that the compiled causal product requires float32 tensors."""
+    query = torch.zeros(size=(1, 1, 2, 2), dtype=dtype)
+    attention = LinearAttention(is_causal=True)
+
+    with pytest.raises(TypeError) as error:
+        attention(
+            query=query,
+            key=query,
+            value=query,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Causal Linear Attention only supports torch.float32 tensors; "
+        f"got query dtype {dtype}, key dtype {dtype}, and value dtype {dtype}."
+    )
