@@ -75,7 +75,8 @@ class _CausalDotProduct(torch.autograd.Function):
         batch_size, num_heads, num_queries, _ = query.shape
         value_head_dim = value.shape[-1]
         attn_output = torch.zeros(
-            (batch_size, num_heads, num_queries, value_head_dim),
+            size=(batch_size, num_heads, num_queries, value_head_dim),
+            dtype=query.dtype,
             device=device,
         )
 
