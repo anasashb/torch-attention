@@ -40,7 +40,9 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
         num_keys=3,
         head_dim=6,
     )
-    value = value[..., :value_head_dim]
+    query.requires_grad_()
+    key.requires_grad_()
+    value = value[..., :value_head_dim].requires_grad_()
     eps = 1e-6
     attention = LinearAttention(is_causal=True, eps=eps)
 
@@ -64,9 +66,36 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
     scores = scores.masked_fill(mask=causal_mask, value=0)
     weights = scores / (scores.sum(dim=-1, keepdim=True) + eps)
     expected_output = weights @ value
+    output_gradient = torch.linspace(
+        start=0.1,
+        end=1.0,
+        steps=output.numel(),
+        dtype=output.dtype,
+        device=output.device,
+    ).reshape_as(output)
+
+    actual_gradients = torch.autograd.grad(
+        outputs=output,
+        inputs=(query, key, value),
+        grad_outputs=output_gradient,
+    )
+    expected_gradients = torch.autograd.grad(
+        outputs=expected_output,
+        inputs=(query, key, value),
+        grad_outputs=output_gradient,
+    )
 
     assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
+    for actual_gradient, expected_gradient in zip(
+        actual_gradients,
+        expected_gradients,
+        strict=True,
+    ):
+        torch.testing.assert_close(
+            actual=actual_gradient,
+            expected=expected_gradient,
+        )
 
 
 def test_causal_linear_attention_applies_key_padding_mask() -> None:
