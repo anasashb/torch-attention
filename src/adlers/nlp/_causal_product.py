@@ -81,7 +81,16 @@ class _CausalDotProduct(torch.autograd.Function):
         )
 
         # Actually perform the dot product
-        _CausalDotProduct.dot[device.type](
+        causal_dot_product = _CausalDotProduct.dot.get(device.type)
+        if causal_dot_product is None:
+            raise RuntimeError(
+                "Causal Linear Attention cannot run on device type "
+                f"{device.type!r} because its compiled extension is "
+                "unavailable. Reinstall ADLERS with support for that device "
+                "or use another supported device."
+            )
+
+        causal_dot_product(
             query.data,
             key.data,
             value.data,
