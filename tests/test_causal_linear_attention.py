@@ -27,8 +27,23 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     assert output.is_contiguous()
 
 
+@pytest.mark.parametrize(
+    "device",
+    [
+        pytest.param(torch.device("cpu"), id="cpu"),
+        pytest.param(
+            torch.device("cuda"),
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(),
+                reason="CUDA is not available",
+            ),
+            id="cuda",
+        ),
+    ],
+)
 @pytest.mark.parametrize("value_head_dim", [6, 4])
 def test_causal_linear_attention_matches_explicit_attention_calculation(
+    device: torch.device,
     value_head_dim: int,
     make_qkv: MakeQKV,
 ) -> None:
@@ -40,9 +55,9 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
         num_keys=3,
         head_dim=6,
     )
-    query.requires_grad_()
-    key.requires_grad_()
-    value = value[..., :value_head_dim].requires_grad_()
+    query = query.to(device=device).requires_grad_()
+    key = key.to(device=device).requires_grad_()
+    value = value[..., :value_head_dim].to(device=device).requires_grad_()
     eps = 1e-6
     attention = LinearAttention(is_causal=True, eps=eps)
 
@@ -60,6 +75,7 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
         torch.ones(
             size=(query.shape[-2], key.shape[-2]),
             dtype=torch.bool,
+            device=device,
         ),
         diagonal=1,
     )
