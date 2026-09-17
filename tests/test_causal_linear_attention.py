@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+from adlers.nlp._causal_product import _CausalDotProduct
 from adlers.nlp.linear_attention import LinearAttention
 from tests._typing import MakeQKV
 
@@ -166,3 +167,26 @@ def test_causal_linear_attention_preserves_query_dtype() -> None:
         torch.set_default_dtype(original_default_dtype)
 
     assert output.dtype == query.dtype
+
+
+def test_causal_linear_attention_reports_unavailable_compiled_extension(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checks the error shown when a compiled operation is unavailable."""
+    monkeypatch.setitem(_CausalDotProduct.dot, "cpu", None)
+    query = torch.zeros(size=(1, 1, 2, 2))
+    attention = LinearAttention(is_causal=True)
+
+    with pytest.raises(RuntimeError) as error:
+        attention(
+            query=query,
+            key=query,
+            value=query,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Causal Linear Attention cannot run on device type 'cpu' because its "
+        "compiled extension is unavailable. Reinstall ADLERS with support for "
+        "that device or use another supported device."
+    )
