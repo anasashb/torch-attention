@@ -143,6 +143,8 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
+    attention: LinearAttention | ProbSparseAttention | ScaledDotProductAttention
+
     if mechanism == "adlers-probsparse":
         attention = ProbSparseAttention(
             is_causal=is_causal,
