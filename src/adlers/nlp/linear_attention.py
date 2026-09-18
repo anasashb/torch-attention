@@ -41,6 +41,9 @@ class LinearAttention(Module):
     queries, following Equations 5 and 6 of *Transformers are RNNs*. This
     avoids constructing the full query-key attention matrix.
 
+    Causal attention uses a compiled CPU or CUDA operation and currently
+    supports only torch.float32 tensors.
+
     Args:
         is_causal (bool): Whether queries can attend to future positions.
         feature_map (Callable[[Tensor], Tensor] | None): Function applied to
@@ -180,7 +183,10 @@ class LinearAttention(Module):
         Raises:
             ValueError: If the input shapes are incompatible or the attention
                 mask has an unsupported shape.
-            TypeError: If the attention mask is not boolean.
+            TypeError: If the attention mask is not boolean or causal
+                attention receives non-float32 tensors.
+            RuntimeError: If causal attention's compiled operation is
+                unavailable for the input device.
         """
         AttentionBase._validate_qkv_rank(
             query=query,
