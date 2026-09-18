@@ -400,9 +400,8 @@ def main(argv: list[str] | None = None) -> None:
     baseline_path: Path | None = args.baseline
     cpu_memory_worker: bool = args.cpu_memory_worker
 
-    default_dtype = torch.float16 if device.type == "cuda" else torch.float32
     dtype = (
-        _DTYPES[selected_dtype] if selected_dtype is not None else default_dtype
+        _DTYPES[selected_dtype] if selected_dtype is not None else torch.float32
     )
 
     dtype_name = str(dtype).removeprefix("torch.")
