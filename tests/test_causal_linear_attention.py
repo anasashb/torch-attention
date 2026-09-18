@@ -1,8 +1,8 @@
 import pytest
 import torch
 
+from adlers.nlp import LinearAttention
 from adlers.nlp._causal_product import _CausalDotProduct
-from adlers.nlp.linear_attention import LinearAttention
 from tests._typing import MakeQKV
 
 

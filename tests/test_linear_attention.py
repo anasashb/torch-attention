@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from adlers.nlp.linear_attention import LinearAttention
+from adlers.nlp import LinearAttention
 from tests._typing import MakeQKV
 
 
