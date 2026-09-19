@@ -42,6 +42,7 @@ torch-cuda = [
 
 [tool.uv]
 default-groups = ["torch-cpu"]
+no-build-isolation-package = ["adlers"]
 conflicts = [
     [
         { group = "torch-cpu" },
@@ -64,9 +65,6 @@ torch = [
     { index = "pytorch-cpu", group = "torch-cpu" },
     { index = "pytorch-cu126", group = "torch-cuda" },
 ]
-
-[tool.uv.extra-build-dependencies]
-adlers = [{ requirement = "torch", match-runtime = true }]
 
 [build-system]
 requires = ["setuptools>=77.0.0", "torch>=2.9.1"]
