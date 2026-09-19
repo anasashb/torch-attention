@@ -107,5 +107,8 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
 
+      - name: Install build dependencies
+        run: uv sync --no-install-project --no-default-groups --group torch-cpu --frozen
+
       - name: Build package
         run: uv build
