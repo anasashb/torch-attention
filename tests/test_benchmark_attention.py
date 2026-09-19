@@ -8,7 +8,15 @@ import torch
 from benchmarks.benchmark_attention import _measure_cuda_memory, main
 
 
+@pytest.mark.parametrize(
+    "causal_args",
+    [
+        pytest.param([], id="non-causal"),
+        pytest.param(["--causal"], id="causal"),
+    ],
+)
 def test_attention_latency_benchmark(
+    causal_args: list[str],
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -34,6 +42,7 @@ def test_attention_latency_benchmark(
             "2",
             "--min-run-time",
             "0.001",
+            *causal_args,
         ]
     )
 
@@ -43,6 +52,7 @@ def test_attention_latency_benchmark(
     assert "ADLERS SDPA (auto)" in output
     assert "ADLERS einsum" in output
     assert "ADLERS ProbSparse" in output
+    assert "ADLERS Linear" in output
     assert "inference" in output
     assert "training" in output
     assert "1x1x2x2" in output

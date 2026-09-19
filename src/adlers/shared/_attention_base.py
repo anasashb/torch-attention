@@ -176,6 +176,54 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             None.
         """
+        AttentionBase._validate_qkv_rank(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qkv_batch_sizes(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qkv_head_counts(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qkv_head_dimensions(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_kv_sequence_lengths(
+            key=key,
+            value=value,
+        )
+
+        # Short-hand notations for shapes
+        Bq, Hq, Lq, _ = query.shape
+        _, _, Lk, _ = key.shape
+
+        if attn_mask is not None and attn_mask.shape not in [
+            (Lq, Lk),
+            (Bq, 1, Lq, Lk),
+            (Bq, Hq, Lq, Lk),
+        ]:
+            raise ValueError(
+                f"Invalid mask shape {attn_mask.shape}, expected "
+                "(num_queries, num_keys), (batch_size, 1, num_queries, "
+                "num_keys), or (batch_size, num_heads, num_queries, "
+                "num_keys)."
+            )
+
+    @staticmethod
+    def _validate_qkv_rank(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value tensors are four-dimensional."""
         for tensor_name, tensor in (
             ("Query", query),
             ("Key", key),
@@ -188,10 +236,16 @@ class AttentionBase(nn.Module, ABC):
                     f"got shape {tuple(tensor.shape)}."
                 )
 
-        # Short-hand notations for shapes
-        Bq, Hq, Lq, Dhq = query.shape
-        Bk, Hk, Lk, Dhk = key.shape
-        Bv, Hv, Lv, Dhv = value.shape
+    @staticmethod
+    def _validate_qkv_batch_sizes(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value batch sizes match."""
+        Bq = query.shape[0]
+        Bk = key.shape[0]
+        Bv = value.shape[0]
 
         if not (Bq == Bk == Bv):
             raise ValueError(
@@ -200,6 +254,18 @@ class AttentionBase(nn.Module, ABC):
                 f"value batch size {Bv}. Use the same batch size for all "
                 "three tensors."
             )
+
+    @staticmethod
+    def _validate_qkv_head_counts(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value head counts match."""
+        Hq = query.shape[1]
+        Hk = key.shape[1]
+        Hv = value.shape[1]
+
         if not (Hq == Hk == Hv):
             raise ValueError(
                 "Query, key, and value head counts must match; "
@@ -207,6 +273,18 @@ class AttentionBase(nn.Module, ABC):
                 f"value head count {Hv}. Use the same number of heads for "
                 "all three tensors."
             )
+
+    @staticmethod
+    def _validate_qkv_head_dimensions(
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+    ) -> None:
+        """Validates that query, key, and value head dimensions match."""
+        Dhq = query.shape[-1]
+        Dhk = key.shape[-1]
+        Dhv = value.shape[-1]
+
         if not (Dhq == Dhk == Dhv):
             raise ValueError(
                 "Query, key, and value head dimensions must match; "
@@ -214,23 +292,31 @@ class AttentionBase(nn.Module, ABC):
                 f"and value head dimension {Dhv}. Use the same head dimension "
                 "for all three tensors."
             )
+
+    @staticmethod
+    def _validate_qk_head_dimensions(query: Tensor, key: Tensor) -> None:
+        """Validates that query and key head dimensions match."""
+        Dhq = query.shape[-1]
+        Dhk = key.shape[-1]
+
+        if Dhq != Dhk:
+            raise ValueError(
+                "Query and key head dimensions must match; "
+                f"got query head dimension {Dhq} and key head dimension {Dhk}. "
+                "Use the same head dimension for both tensors."
+            )
+
+    @staticmethod
+    def _validate_kv_sequence_lengths(key: Tensor, value: Tensor) -> None:
+        """Validates that key and value sequence lengths match."""
+        Lk = key.shape[-2]
+        Lv = value.shape[-2]
+
         if Lk != Lv:
             raise ValueError(
                 "Key and value sequence lengths must match; "
                 f"got key length {Lk} and value length {Lv}. "
                 "Provide one value position for each key position."
-            )
-
-        if attn_mask is not None and attn_mask.shape not in [
-            (Lq, Lk),
-            (Bq, 1, Lq, Lk),
-            (Bq, Hq, Lq, Lk),
-        ]:
-            raise ValueError(
-                f"Invalid mask shape {attn_mask.shape}, expected "
-                "(num_queries, num_keys), (batch_size, 1, num_queries, "
-                "num_keys), or (batch_size, num_heads, num_queries, "
-                "num_keys)."
             )
 
     @staticmethod

@@ -1,12 +1,14 @@
 [project]
 name = "adlers"
-version = "0.5.0"
+version = "0.6.0"
 description = "A unified package for PyTorch-based attention mechanisms from across domains"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT AND Apache-2.0"
 license-files = [
     "LICENSE",
+    "LICENSES/fast-transformers-MIT.txt",
+    "LICENSES/causal-product-NVIDIA-MIT.txt",
     "LICENSES/Apache-2.0.txt",
     "NOTICE",
 ]
@@ -40,6 +42,7 @@ torch-cuda = [
 
 [tool.uv]
 default-groups = ["torch-cpu"]
+no-build-isolation-package = ["adlers"]
 conflicts = [
     [
         { group = "torch-cpu" },
@@ -64,18 +67,15 @@ torch = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.10.0"]
-build-backend = "uv_build"
+requires = ["setuptools>=77.0.0", "torch>=2.9.1"]
+build-backend = "setuptools.build_meta"
 
-[tool.uv.build-backend]
-module-name = ["adlers"]
-module-root = "src"
-source-include = ["src"]
-source-exclude = [
-    "**/.mypy_cache",
-    "**/__pycache__",
-    "**/*.pyc",
-]
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
 
 [tool.black]
 line-length = 80
@@ -83,6 +83,7 @@ target-version = ["py311"]
 
 [tool.isort]
 profile = "black"
+line_length = 80
 
 [tool.mypy]
 ignore_missing_imports = true

@@ -1,0 +1,262 @@
+# Adapted from fast-transformers:
+# https://github.com/idiap/fast-transformers/blob/2ad36b97e64cb93862937bd21fcc9568d989561f/fast_transformers/attention/linear_attention.py
+# https://github.com/idiap/fast-transformers/blob/2ad36b97e64cb93862937bd21fcc9568d989561f/fast_transformers/attention/causal_linear_attention.py
+#
+# Licensed under the MIT License.
+# This file has been modified for ADLERS.
+# See LICENSES/fast-transformers-MIT.txt and NOTICE.
+#
+# Copyright (c) 2020 Idiap Research Institute, http://www.idiap.ch/
+# Written by Angelos Katharopoulos <angelos.katharopoulos@idiap.ch>,
+# Apoorv Vyas <avyas@idiap.ch>
+#
+# Paper:
+# Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention
+# https://proceedings.mlr.press/v119/katharopoulos20a.html
+#
+# Equation references below refer to this paper.
+#
+
+"""Implement Linear Attention."""
+
+from collections.abc import Callable
+
+import torch
+from torch import Tensor
+from torch.nn import Module
+
+from adlers.nlp._causal_product import _causal_linear
+from adlers.shared._attention_base import AttentionBase
+
+
+def _elu_feature_map(tensor: Tensor) -> Tensor:
+    return torch.nn.functional.elu(tensor) + 1
+
+
+class LinearAttention(Module):
+    """
+    Implements the Linear Attention mechanism from *Transformers are RNNs*.
+
+    Mapped keys and values are combined before they are applied to the
+    queries, following Equations 5 and 6 of *Transformers are RNNs*. This
+    avoids constructing the full query-key attention matrix.
+
+    Causal attention uses a compiled CPU or CUDA operation and currently
+    supports only torch.float32 tensors.
+
+    Args:
+        is_causal (bool): Whether queries can attend to future positions.
+        feature_map (Callable[[Tensor], Tensor] | None): Function applied to
+            query and key tensors. When None, defaults to ELU(x) + 1 from
+            Equation 7.
+        eps (float): Small value added to the normalization denominator for
+            numerical stability.
+        dropout_rate (float): Dropout rate. Only 0.0 is supported.
+        output_attention_scores (bool): Whether to return attention scores.
+            Only False is supported.
+
+    Attributes:
+        is_causal (bool): Whether causal attention is enabled.
+        feature_map (Callable[[Tensor], Tensor]): Configured feature-map
+            function.
+        eps (float): Value added to the normalization denominator.
+    """
+
+    def __init__(
+        self,
+        is_causal: bool = False,
+        feature_map: Callable[[Tensor], Tensor] | None = None,
+        eps: float = 1e-6,
+        dropout_rate: float = 0.0,
+        output_attention_scores: bool = False,
+    ) -> None:
+        if dropout_rate != 0.0:
+            raise ValueError(
+                "Linear attention does not support dropout; "
+                f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
+            )
+
+        if output_attention_scores:
+            raise ValueError(
+                "Linear attention does not support returning attention scores. "
+                "Set output_attention_scores=False."
+            )
+
+        super().__init__()
+        self.is_causal = is_causal
+        self.feature_map = (
+            feature_map if feature_map is not None else _elu_feature_map
+        )
+        self.eps = eps
+
+    def _attend_non_causal(
+        self,
+        mapped_query: Tensor,
+        mapped_key: Tensor,
+        value: Tensor,
+    ) -> Tensor:
+        """Computes non-causal attention from mapped queries and keys."""
+        # Compute phi(K)^T V first (right-hand side of Equation 6)
+        key_value_product = torch.einsum(
+            "bhsd,bhsm->bhmd",
+            mapped_key,
+            value,
+        )
+
+        # Invert the denominator from Equation 5 for the final multiplication
+        normalization_factor = 1 / (
+            torch.einsum(
+                "bhld,bhd->bhl",
+                mapped_query,
+                mapped_key.sum(dim=-2),
+            )
+            + self.eps
+        )
+
+        # Apply the shared key-value product to every query (Equations 5-6)
+        return torch.einsum(
+            "bhld,bhmd,bhl->bhlm",
+            mapped_query,
+            key_value_product,
+            normalization_factor,
+        )
+
+    def _attend_causal(
+        self,
+        mapped_query: Tensor,
+        mapped_key: Tensor,
+        value: Tensor,
+    ) -> Tensor:
+        """Computes causal attention from mapped queries and keys."""
+        if (
+            mapped_query.dtype != torch.float32
+            or mapped_key.dtype != torch.float32
+            or value.dtype != torch.float32
+        ):
+            raise TypeError(
+                "Causal Linear Attention only supports torch.float32 tensors; "
+                f"got query dtype {mapped_query.dtype}, "
+                f"key dtype {mapped_key.dtype}, and "
+                f"value dtype {value.dtype}."
+            )
+
+        normalization_factor = 1 / (
+            torch.einsum(
+                "bhld,bhld->bhl",
+                mapped_query,
+                mapped_key.cumsum(dim=-2),
+            )
+            + self.eps
+        )
+        unnormalized_attn_output = _causal_linear(
+            mapped_query,
+            mapped_key,
+            value,
+        )
+        return unnormalized_attn_output * normalization_factor[:, :, :, None]
+
+    def forward(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None = None,
+    ) -> tuple[Tensor, None]:
+        """
+        Computes Linear Attention.
+
+        Args:
+            query (Tensor): Query tensor of shape [batch_size, num_heads,
+                num_queries, head_dim].
+            key (Tensor): Key tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_keys, value_head_dim].
+            attn_mask (Tensor | None): Optional boolean key-padding mask of
+                shape [batch_size, 1, 1, num_keys]. True marks key positions
+                that should be masked out.
+
+        Returns:
+            tuple[Tensor, None]: The attention output of shape [batch_size,
+                num_heads, num_queries, value_head_dim] and None.
+
+        Raises:
+            ValueError: If the input shapes are incompatible or the attention
+                mask has an unsupported shape.
+            TypeError: If the attention mask is not boolean or causal
+                attention receives non-float32 tensors.
+            RuntimeError: If causal attention's compiled operation is
+                unavailable for the input device.
+        """
+        AttentionBase._validate_qkv_rank(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qkv_batch_sizes(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qkv_head_counts(
+            query=query,
+            key=key,
+            value=value,
+        )
+        AttentionBase._validate_qk_head_dimensions(
+            query=query,
+            key=key,
+        )
+        AttentionBase._validate_kv_sequence_lengths(
+            key=key,
+            value=value,
+        )
+        if self.is_causal:
+            num_queries = query.shape[-2]
+            num_keys = key.shape[-2]
+            num_values = value.shape[-2]
+            if not (num_queries == num_keys == num_values):
+                raise ValueError(
+                    "Query, key, and value sequence lengths must match for "
+                    "causal linear attention; "
+                    f"got query length {num_queries}, key length {num_keys}, "
+                    f"and value length {num_values}. Use the same sequence "
+                    "length for all three tensors."
+                )
+
+        # Map queries and keys into feature space (Equation 4)
+        mapped_query = self.feature_map(query)
+        mapped_key = self.feature_map(key)
+
+        if attn_mask is not None:
+            AttentionBase._validate_attn_mask_dtype(attn_mask=attn_mask)
+            expected_mask_shape = (
+                query.shape[0],
+                1,
+                1,
+                key.shape[-2],
+            )
+            if attn_mask.shape != expected_mask_shape:
+                raise ValueError(
+                    "Linear attention only supports key-padding masks shaped "
+                    "[batch_size, 1, 1, num_keys]; "
+                    f"got shape {tuple(attn_mask.shape)}."
+                )
+
+            key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
+            mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
+
+        if self.is_causal:
+            attn_output = self._attend_causal(
+                mapped_query=mapped_query,
+                mapped_key=mapped_key,
+                value=value,
+            )
+        else:
+            attn_output = self._attend_non_causal(
+                mapped_query=mapped_query,
+                mapped_key=mapped_key,
+                value=value,
+            )
+
+        return attn_output.contiguous(), None

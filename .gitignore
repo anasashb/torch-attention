@@ -176,3 +176,4 @@ cython_debug/
 
 # Repo specific
 benchmark-results/
+papers/

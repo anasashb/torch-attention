@@ -12,7 +12,11 @@ Unified attention mechanisms for PyTorch across NLP, vision, and time series.
 ```python
 import torch
 
-from adlers import ProbSparseAttention, ScaledDotProductAttention
+from adlers import (
+    LinearAttention,
+    ProbSparseAttention,
+    ScaledDotProductAttention,
+)
 
 query = torch.randn(2, 4, 16, 32)
 key = torch.randn(2, 4, 16, 32)
@@ -41,6 +45,25 @@ output, weights = attention(query=query, key=key, value=value)
 
 Custom attention masks and nonzero dropout are not currently supported, because
 the original implementation does not support them.
+
+### Linear attention
+
+`LinearAttention` implements the mechanism from
+[*Transformers are RNNs*](https://proceedings.mlr.press/v119/katharopoulos20a.html).
+
+```python
+attention = LinearAttention(is_causal=False)
+output, _ = attention(query=query, key=key, value=value)
+```
+
+Set `is_causal=True` for causal Linear Attention. Non-causal attention allows
+different query and key lengths, while causal attention requires query, key,
+and value lengths to match.
+
+Only compact boolean key-padding masks shaped
+`[batch_size, 1, 1, num_keys]` are supported. Pairwise attention masks,
+nonzero dropout, and attention-score output are not supported. The causal
+implementation currently requires `torch.float32`.
 
 ## Supported Tensor and mask shapes
 

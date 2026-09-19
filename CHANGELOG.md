@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-09-19
+
+### Added
+
+- Added Linear Attention from *Transformers are RNNs*, with non-causal and
+  causal modes.
+- Added compact boolean key-padding masks for Linear Attention.
+- Added compiled CPU and CUDA operations for causal Linear Attention.
+- Added Linear Attention to the attention benchmark.
+- Made `LinearAttention` available from `adlers` and `adlers.nlp`.
+- Included the MIT licenses and attribution for the fast-transformers and
+  NVIDIA code adapted in this release.
+
+### Changed
+
+- Switched the build backend from uv_build to setuptools to compile the native
+  extensions.
+- Configured ADLERS to compile its extensions against the installed PyTorch
+  version.
+
 ## [0.5.0] - 2026-08-17
 
 ### Added

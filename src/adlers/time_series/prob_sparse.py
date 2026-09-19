@@ -60,15 +60,25 @@ class ProbSparseAttention(nn.Module):
     queries retain the default context (`S0` in Algorithm 1 of the Informer
     paper).
 
-    Attributes:
-        factor (int): Sampling factor `c` used to determine how many keys are
-            sampled and queries selected.
-        custom_scale_factor (float | None): Scale applied to selected
-            query-key scores.
+    Args:
         is_causal (bool): Whether queries can attend to future key positions.
-        output_attention_scores (bool): Whether forward() returns attention
-            weights.
+        factor (int): Sampling factor `c` used to determine how many keys are
+            sampled and queries selected. Must be greater than zero.
+        custom_scale_factor (float | None): Scale applied to selected
+            query-key scores. When None, defaults to the inverse square root
+            of the query head dimension.
+        dropout_rate (float): Dropout rate. Only 0.0 is supported.
+        output_attention_scores (bool): Whether forward() returns approximate
+            dense attention weights.
         strict_mode (bool): Whether input shapes are validated on every call.
+
+    Attributes:
+        factor (int): Configured sampling factor.
+        custom_scale_factor (float | None): Configured score scaling factor.
+        is_causal (bool): Whether causal masking is enabled.
+        output_attention_scores (bool): Whether attention weights are
+            returned.
+        strict_mode (bool): Whether shape validation is enabled.
     """
 
     def __init__(
