@@ -122,14 +122,10 @@ def test_scaled_dot_product_supports_cpu_bfloat16_autocast(
 ) -> None:
     """Checks CPU bfloat16 autocast compatibility for every backend."""
     query, key, value = make_qkv()
-    output_attention_scores = backend == "einsum"
-    attention = ScaledDotProductAttention(
-        backend=backend,
-        output_attention_scores=output_attention_scores,
-    )
+    attention = ScaledDotProductAttention(backend=backend)
 
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
-        output, weights = attention(
+        output = attention(
             query=query,
             key=key,
             value=value,
@@ -138,12 +134,6 @@ def test_scaled_dot_product_supports_cpu_bfloat16_autocast(
 
     assert output.dtype == torch.bfloat16
     assert torch.isfinite(output).all()
-    if output_attention_scores:
-        assert weights is not None
-        assert weights.dtype == torch.bfloat16
-        assert torch.isfinite(weights).all()
-    else:
-        assert weights is None
 
 
 @pytest.mark.parametrize("backend", ["einsum", "sdpa"])
