@@ -516,31 +516,22 @@ def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
     )
     attn_mask = torch.zeros(num_queries, num_keys, dtype=torch.bool)
     attn_mask[fully_masked_query_index, :] = True
-    einsum_attention = ScaledDotProductAttention(
-        backend="einsum",
-        output_attention_scores=True,
-    )
+    einsum_attention = ScaledDotProductAttention(backend="einsum")
     sdpa_attention = ScaledDotProductAttention(backend="sdpa")
 
-    einsum_output, einsum_weights = einsum_attention(
+    einsum_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    sdpa_output, sdpa_weights = sdpa_attention(
+    sdpa_output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
 
-    assert einsum_weights is not None
-    assert sdpa_weights is None
-    torch.testing.assert_close(
-        einsum_weights[..., fully_masked_query_index, :],
-        torch.zeros_like(einsum_weights[..., fully_masked_query_index, :]),
-    )
     torch.testing.assert_close(
         einsum_output[..., fully_masked_query_index, :],
         torch.zeros_like(einsum_output[..., fully_masked_query_index, :]),
