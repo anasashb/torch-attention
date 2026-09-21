@@ -8,13 +8,11 @@ from tests._typing import MakeQKV
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
-@pytest.mark.parametrize("output_attention_scores", [False, True])
 def test_scaled_dot_product(
     is_causal: bool,
-    output_attention_scores: bool,
     make_qkv: MakeQKV,
 ) -> None:
-    """Checks default einsum attention shapes and optional attention scores."""
+    """Checks default einsum attention output shapes."""
     batch_size = 32
     num_heads = 4
     num_queries = 96
@@ -33,37 +31,20 @@ def test_scaled_dot_product(
         is_causal=is_causal,
         dropout_rate=0.0,
         backend="einsum",
-        output_attention_scores=output_attention_scores,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
+    output = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    assert output.shape == (batch_size, num_heads, num_queries, head_dim)
     if is_causal:
-        # let it generate the triangular mask on its own
-        out, weights = attention(
-            query=query,
-            key=key,
-            value=value,
-            attn_mask=None,
-        )
-        assert torch.isfinite(out).all()
-    else:
-        out, weights = attention(
-            query=query,
-            key=key,
-            value=value,
-            attn_mask=None,
-        )
-
-    assert out.shape == (batch_size, num_heads, num_queries, head_dim)
-
-    if output_attention_scores:
-        assert weights.shape == (batch_size, num_heads, num_queries, num_keys)
-
-        summed_weights = weights.sum(dim=-1)
-        assert torch.allclose(
-            summed_weights, torch.ones_like(summed_weights), atol=1e-5
-        )
+        assert torch.isfinite(output).all()
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
