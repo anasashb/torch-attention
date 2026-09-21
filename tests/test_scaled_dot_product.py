@@ -83,7 +83,7 @@ def test_sdpa_backend_matches_torch_scaled_dot_product_attention(
         custom_scale_factor=None,
     )
 
-    out, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -98,8 +98,7 @@ def test_sdpa_backend_matches_torch_scaled_dot_product_attention(
         is_causal=is_causal,
     )
 
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+    torch.testing.assert_close(output, expected_out)
 
 
 @pytest.mark.parametrize("backend", ["einsum", "sdpa"])
