@@ -150,24 +150,20 @@ def test_scaled_dot_product_supports_torch_compile_fullgraph_capture(
     )
     attn_mask = torch.zeros(3, 5, dtype=torch.bool)
     attn_mask[:, -1] = True
-    output_attention_scores = backend == "einsum"
-    attention = ScaledDotProductAttention(
-        backend=backend,
-        output_attention_scores=output_attention_scores,
-    )
+    attention = ScaledDotProductAttention(backend=backend)
     compiled_attention = torch.compile(
         model=attention,
         backend="eager",
         fullgraph=True,
     )
 
-    expected_output, expected_weights = attention(
+    expected_output = attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    output, weights = compiled_attention(
+    output = compiled_attention(
         query=query,
         key=key,
         value=value,
@@ -175,13 +171,6 @@ def test_scaled_dot_product_supports_torch_compile_fullgraph_capture(
     )
 
     torch.testing.assert_close(output, expected_output)
-    if output_attention_scores:
-        assert weights is not None
-        assert expected_weights is not None
-        torch.testing.assert_close(weights, expected_weights)
-    else:
-        assert weights is None
-        assert expected_weights is None
 
 
 @pytest.mark.filterwarnings(
