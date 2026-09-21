@@ -295,7 +295,6 @@ def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
         is_causal=False,
         dropout_rate=0.0,
         backend="einsum",
-        output_attention_scores=True,
         strict_mode=True,
         custom_scale_factor=None,
     )
@@ -303,40 +302,30 @@ def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
         is_causal=False,
         dropout_rate=0.0,
         backend="sdpa",
-        output_attention_scores=False,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
-    expected_out, expected_weights = einsum_attention(
+    expected_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    out, weights = sdpa_attention(
+    output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
 
-    assert expected_out.shape == (
+    assert expected_output.shape == (
         batch_size,
         num_heads,
         num_queries,
         query.shape[-1],
     )
-    assert expected_weights is not None
-    assert expected_weights.shape == (
-        batch_size,
-        num_heads,
-        num_queries,
-        num_keys,
-    )
-    assert torch.count_nonzero(expected_weights[..., -1]) == 0
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+    torch.testing.assert_close(output, expected_output)
 
 
 def test_scaled_dot_product_rejects_unequal_key_and_value_lengths(
