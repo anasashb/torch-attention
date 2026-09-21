@@ -13,8 +13,6 @@ class AttentionBase(nn.Module, ABC):
         is_causal (bool): Whether to prevent queries from attending to future
             key positions.
         dropout_rate (float): Dropout rate.
-        output_attention_scores (bool): Whether forward() should return
-            attention weights.
         strict_mode (bool): Whether to explicitly validate tensor shapes
             at each forward call.
         custom_scale_factor (Optional[float]): Custom attention scaling factor.
@@ -26,7 +24,6 @@ class AttentionBase(nn.Module, ABC):
         self,
         is_causal: bool = False,
         dropout_rate: float = 0.0,
-        output_attention_scores: bool = False,
         strict_mode: bool = True,
         custom_scale_factor: float | None = None,
     ) -> None:
@@ -35,7 +32,6 @@ class AttentionBase(nn.Module, ABC):
         self.dropout = (
             nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity()
         )
-        self.output_attention_scores = output_attention_scores
         self.strict_mode = strict_mode
         self.custom_scale_factor = custom_scale_factor
 
@@ -45,7 +41,7 @@ class AttentionBase(nn.Module, ABC):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Forward method inherited by all child classes of AttentionBase.
         Includes shared logic such as mask shape normalization (adjustment),
@@ -71,8 +67,6 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Optional[Tensor]): Attention weights tensor of shape
-                [batch_size, num_heads, num_queries, num_keys].
 
         Raises:
             TypeError: If attn_mask is not a torch.bool tensor.
@@ -100,18 +94,12 @@ class AttentionBase(nn.Module, ABC):
             scale_factor = 1.0 / sqrt(head_dim)
 
         # Core computations
-        attn_output, attn_weights = self._attend(
+        return self._attend(
             query=query,
             key=key,
             value=value,
             scale_factor=scale_factor,
             attn_mask=attn_mask,
-        )
-
-        return (
-            (attn_output, attn_weights)
-            if self.output_attention_scores
-            else (attn_output, None)
         )
 
     @abstractmethod
@@ -122,7 +110,7 @@ class AttentionBase(nn.Module, ABC):
         value: Tensor,
         scale_factor: float,
         attn_mask: Tensor | None,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Core attention method that will be overridden in subclasses.
 
@@ -142,8 +130,6 @@ class AttentionBase(nn.Module, ABC):
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Optional[Tensor]): Attention weights tensor of shape
-                [batch_size, num_heads, num_queries, num_keys].
         """
         raise NotImplementedError("Subclasses must implement _attend()")
 

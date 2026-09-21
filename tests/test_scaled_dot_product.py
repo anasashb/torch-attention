@@ -78,7 +78,6 @@ def test_sdpa_backend_matches_torch_scaled_dot_product_attention(
         is_causal=is_causal,
         dropout_rate=0.0,
         backend="sdpa",
-        output_attention_scores=False,
         strict_mode=True,
         custom_scale_factor=None,
     )

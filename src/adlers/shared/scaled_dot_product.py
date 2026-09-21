@@ -15,30 +15,25 @@ class ScaledDotProductAttention(AttentionBase):
     value lengths must match.
 
     The "einsum" backend computes attention explicitly with PyTorch tensor
-    operations and can return attention weights. The "sdpa" backend delegates
-    to torch.nn.functional.scaled_dot_product_attention, which can use
+    operations. The "sdpa" backend delegates to
+    torch.nn.functional.scaled_dot_product_attention, which can use
     optimized PyTorch kernels depending on the device, dtype, mask, and runtime
-    configuration. Use "sdpa" when attention weights are not needed.
+    configuration.
 
     Attention masks must be torch.bool tensors. True marks positions that
     should be masked out, and False marks positions that can be attended to.
-    Fully masked query rows produce zero outputs. The "einsum" backend also
-    returns zero attention weights for those rows.
+    Fully masked query rows produce zero outputs.
 
     Args:
         is_causal (bool): Whether to prevent queries from attending to future
             key positions.
         dropout_rate (float): Dropout rate.
-        output_attention_scores (bool): Whether forward() should return
-            attention weights.
         strict_mode (bool): Whether to explicitly validate tensor shapes
             at each forward call.
         custom_scale_factor (Optional[float]): Custom attention scaling factor.
         backend (AttentionBackend): Attention implementation to use. The
-            "einsum" backend returns attention outputs and optionally attention
-            weights. The "sdpa" backend delegates to PyTorch's native
-            scaled dot-product attention implementation and cannot return
-            attention weights.
+            "sdpa" backend delegates to PyTorch's native scaled dot-product
+            attention implementation.
 
     Attributes:
         backend (AttentionBackend): Attention implementation used by forward().
@@ -48,7 +43,6 @@ class ScaledDotProductAttention(AttentionBase):
         self,
         is_causal: bool = False,
         dropout_rate: float = 0.0,
-        output_attention_scores: bool = False,
         strict_mode: bool = True,
         custom_scale_factor: float | None = None,
         backend: AttentionBackend = "einsum",
@@ -58,17 +52,10 @@ class ScaledDotProductAttention(AttentionBase):
                 "Invalid backend. Expected 'einsum' or 'sdpa', "
                 f"got {backend!r}."
             )
-        if backend == "sdpa" and output_attention_scores:
-            raise ValueError(
-                "The 'sdpa' backend does not support returning attention "
-                "scores. Use backend='einsum' or set "
-                "output_attention_scores=False."
-            )
 
         super().__init__(
             is_causal=is_causal,
             dropout_rate=dropout_rate,
-            output_attention_scores=output_attention_scores,
             strict_mode=strict_mode,
             custom_scale_factor=custom_scale_factor,
         )
@@ -81,7 +68,7 @@ class ScaledDotProductAttention(AttentionBase):
         value: Tensor,
         scale_factor: float,
         attn_mask: Tensor | None,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Routes scaled dot-product attention to the configured backend.
 
@@ -99,8 +86,6 @@ class ScaledDotProductAttention(AttentionBase):
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Optional[Tensor]): Attention weights tensor of shape
-                [batch_size, num_heads, num_queries, num_keys].
         """
         if self.backend == "einsum":
             return self._attend_einsum(
@@ -126,7 +111,7 @@ class ScaledDotProductAttention(AttentionBase):
         value: Tensor,
         scale_factor: float,
         attn_mask: Tensor | None,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tensor:
         """
         Computes attention with explicit einsum operations.
 
@@ -144,8 +129,6 @@ class ScaledDotProductAttention(AttentionBase):
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Tensor): Attention weights tensor of shape
-                [batch_size, num_heads, num_queries, num_keys].
         """
         # Get raw scores
         scores = torch.einsum("bhle,bhse->bhls", query, key)
@@ -171,7 +154,7 @@ class ScaledDotProductAttention(AttentionBase):
         # Get attention outputs
         attn_outputs = torch.einsum("bhls,bhsd->bhld", attn_weights, value)
 
-        return attn_outputs, attn_weights
+        return attn_outputs
 
     def _attend_sdpa(
         self,
@@ -180,7 +163,7 @@ class ScaledDotProductAttention(AttentionBase):
         value: Tensor,
         scale_factor: float,
         attn_mask: Tensor | None,
-    ) -> tuple[Tensor, None]:
+    ) -> Tensor:
         """
         Computes attention with PyTorch's native SDPA implementation.
 
@@ -202,7 +185,6 @@ class ScaledDotProductAttention(AttentionBase):
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            None: SDPA does not return attention weights.
         """
         is_causal = self.is_causal
 
@@ -236,4 +218,4 @@ class ScaledDotProductAttention(AttentionBase):
             scale=scale_factor,
         )
 
-        return attn_outputs, None
+        return attn_outputs
