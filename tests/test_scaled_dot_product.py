@@ -239,7 +239,6 @@ def test_scaled_dot_product_supports_mask_broadcasting(
         is_causal=False,
         dropout_rate=0.0,
         backend="einsum",
-        output_attention_scores=True,
         strict_mode=True,
         custom_scale_factor=None,
     )
@@ -247,28 +246,32 @@ def test_scaled_dot_product_supports_mask_broadcasting(
         is_causal=False,
         dropout_rate=0.0,
         backend="sdpa",
-        output_attention_scores=False,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
-    expected_out, expected_weights = einsum_attention(
+    einsum_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    out, weights = sdpa_attention(
+    sdpa_output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
+    )
+    expected_output = F.scaled_dot_product_attention(
+        query=query,
+        key=key[..., :-1, :],
+        value=value[..., :-1, :],
+        dropout_p=0.0,
+        is_causal=False,
     )
 
-    assert expected_weights is not None
-    assert torch.count_nonzero(expected_weights[..., -1]) == 0
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+    torch.testing.assert_close(einsum_output, expected_output)
+    torch.testing.assert_close(sdpa_output, expected_output)
 
 
 def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
