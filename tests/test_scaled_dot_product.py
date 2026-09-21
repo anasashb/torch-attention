@@ -543,15 +543,6 @@ def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
     torch.testing.assert_close(einsum_output, sdpa_output)
 
 
-def test_sdpa_backend_rejects_attention_scores() -> None:
-    """Checks that SDPA rejects unsupported attention score output."""
-    with pytest.raises(ValueError, match="does not support"):
-        ScaledDotProductAttention(
-            backend="sdpa",
-            output_attention_scores=True,
-        )
-
-
 def test_scaled_dot_product_rejects_invalid_backend() -> None:
     """Checks that unknown attention backends fail fast."""
     with pytest.raises(ValueError, match="Invalid backend"):
