@@ -468,33 +468,35 @@ def test_scaled_dot_product_combines_causal_and_explicit_masks(
     einsum_attention = ScaledDotProductAttention(
         is_causal=True,
         backend="einsum",
-        output_attention_scores=True,
     )
     sdpa_attention = ScaledDotProductAttention(
         is_causal=True,
         backend="sdpa",
-        output_attention_scores=False,
     )
 
-    expected_out, expected_weights = einsum_attention(
+    einsum_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    out, weights = sdpa_attention(
+    sdpa_output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-
-    assert expected_weights is not None
-    assert (
-        torch.count_nonzero(expected_weights.masked_select(combined_mask)) == 0
+    expected_output = F.scaled_dot_product_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=~combined_mask,
+        dropout_p=0.0,
+        is_causal=False,
     )
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+
+    torch.testing.assert_close(einsum_output, expected_output)
+    torch.testing.assert_close(sdpa_output, expected_output)
 
 
 def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
