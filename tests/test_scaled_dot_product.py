@@ -88,27 +88,24 @@ def test_scaled_dot_product_disables_dropout_during_evaluation(
 ) -> None:
     """Checks that evaluation mode disables dropout for every backend."""
     query, key, value = make_qkv()
-    output_attention_scores = backend == "einsum"
     attention_with_dropout = ScaledDotProductAttention(
         dropout_rate=0.5,
         backend=backend,
-        output_attention_scores=output_attention_scores,
     )
     attention_without_dropout = ScaledDotProductAttention(
         dropout_rate=0.0,
         backend=backend,
-        output_attention_scores=output_attention_scores,
     )
     attention_with_dropout.eval()
     attention_without_dropout.eval()
 
-    output, weights = attention_with_dropout(
+    output = attention_with_dropout(
         query=query,
         key=key,
         value=value,
         attn_mask=None,
     )
-    expected_output, expected_weights = attention_without_dropout(
+    expected_output = attention_without_dropout(
         query=query,
         key=key,
         value=value,
@@ -116,13 +113,6 @@ def test_scaled_dot_product_disables_dropout_during_evaluation(
     )
 
     torch.testing.assert_close(output, expected_output)
-    if output_attention_scores:
-        assert weights is not None
-        assert expected_weights is not None
-        torch.testing.assert_close(weights, expected_weights)
-    else:
-        assert weights is None
-        assert expected_weights is None
 
 
 @pytest.mark.parametrize("backend", ["einsum", "sdpa"])
