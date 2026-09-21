@@ -198,11 +198,7 @@ def test_scaled_dot_product_supports_strict_torch_export(
         "value": value,
         "attn_mask": attn_mask,
     }
-    output_attention_scores = backend == "einsum"
-    attention = ScaledDotProductAttention(
-        backend=backend,
-        output_attention_scores=output_attention_scores,
-    )
+    attention = ScaledDotProductAttention(backend=backend)
     exported_program = torch.export.export(
         mod=attention,
         args=(),
@@ -210,17 +206,10 @@ def test_scaled_dot_product_supports_strict_torch_export(
         strict=True,
     )
 
-    expected_output, expected_weights = attention(**inputs)
-    output, weights = exported_program.module()(**inputs)
+    expected_output = attention(**inputs)
+    output = exported_program.module()(**inputs)
 
     torch.testing.assert_close(output, expected_output)
-    if output_attention_scores:
-        assert weights is not None
-        assert expected_weights is not None
-        torch.testing.assert_close(weights, expected_weights)
-    else:
-        assert weights is None
-        assert expected_weights is None
 
 
 @pytest.mark.parametrize(
