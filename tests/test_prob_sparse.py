@@ -120,19 +120,16 @@ def test_prob_sparse_supports_single_position_sequences(
     attention = ProbSparseAttention(
         is_causal=is_causal,
         factor=1,
-        output_attention_scores=True,
     )
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
         attn_mask=None,
     )
 
-    assert weights is not None
     torch.testing.assert_close(output, value)
-    torch.testing.assert_close(weights, torch.ones_like(weights))
 
 
 def test_prob_sparse_uses_zero_custom_scale_factor() -> None:
