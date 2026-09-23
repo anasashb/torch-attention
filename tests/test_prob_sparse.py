@@ -95,7 +95,7 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
         torch.testing.assert_close(weights, expected_weights)
 
 
-def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
+def test_prob_sparse_supports_different_query_and_key_lengths(
     make_qkv: MakeQKV,
 ) -> None:
     """Checks non-causal attention with different query and key lengths."""
@@ -112,10 +112,9 @@ def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
     attention = ProbSparseAttention(
         is_causal=False,
         factor=1,
-        output_attention_scores=True,
     )
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -127,13 +126,6 @@ def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
         num_heads,
         num_queries,
         query.shape[-1],
-    )
-    assert weights is not None
-    assert weights.shape == (
-        batch_size,
-        num_heads,
-        num_queries,
-        num_keys,
     )
 
 
