@@ -164,7 +164,6 @@ def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
         is_causal=True,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=False,
     )
 
     with pytest.raises(ValueError) as error:
