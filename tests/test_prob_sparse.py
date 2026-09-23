@@ -8,13 +8,10 @@ from tests._typing import MakeQKV
 @pytest.mark.parametrize(
     (
         "is_causal",
-        "output_attention_scores",
         "expected_output",
-        "expected_weights",
     ),
     [
         pytest.param(
-            False,
             False,
             torch.tensor(
                 [
@@ -28,11 +25,9 @@ from tests._typing import MakeQKV
                     ]
                 ]
             ),
-            None,
-            id="non_causal_without_attention",
+            id="non_causal",
         ),
         pytest.param(
-            True,
             True,
             torch.tensor(
                 [
@@ -46,27 +41,13 @@ from tests._typing import MakeQKV
                     ]
                 ]
             ),
-            torch.tensor(
-                [
-                    [
-                        [
-                            [0.25, 0.25, 0.25, 0.25],
-                            [0.25, 0.25, 0.25, 0.25],
-                            [0.24825509, 0.24825509, 0.50348985, 0.0],
-                            [0.61451048, 0.07366338, 0.30299589, 0.00883027],
-                        ]
-                    ]
-                ]
-            ),
-            id="causal_with_attention",
+            id="causal",
         ),
     ],
 )
 def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
     is_causal: bool,
-    output_attention_scores: bool,
     expected_output: torch.Tensor,
-    expected_weights: torch.Tensor | None,
 ) -> None:
     """Checks the pinned Informer outputs for sparse query selection."""
     query = torch.tensor([[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, -1.0]]]])
@@ -76,11 +57,10 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
         is_causal=is_causal,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=output_attention_scores,
     )
     torch.manual_seed(seed=66)
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -88,11 +68,6 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
     )
 
     torch.testing.assert_close(output, expected_output)
-    if expected_weights is None:
-        assert weights is None
-    else:
-        assert weights is not None
-        torch.testing.assert_close(weights, expected_weights)
 
 
 def test_prob_sparse_supports_different_query_and_key_lengths(
