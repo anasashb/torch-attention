@@ -68,16 +68,12 @@ class ProbSparseAttention(nn.Module):
             query-key scores. When None, defaults to the inverse square root
             of the query head dimension.
         dropout_rate (float): Dropout rate. Only 0.0 is supported.
-        output_attention_scores (bool): Whether forward() returns approximate
-            dense attention weights.
         strict_mode (bool): Whether input shapes are validated on every call.
 
     Attributes:
         factor (int): Configured sampling factor.
         custom_scale_factor (float | None): Configured score scaling factor.
         is_causal (bool): Whether causal masking is enabled.
-        output_attention_scores (bool): Whether attention weights are
-            returned.
         strict_mode (bool): Whether shape validation is enabled.
     """
 
@@ -87,7 +83,6 @@ class ProbSparseAttention(nn.Module):
         factor: int = 5,
         custom_scale_factor: float | None = None,
         dropout_rate: float = 0.0,
-        output_attention_scores: bool = False,
         strict_mode: bool = True,
     ) -> None:
         if factor <= 0:
@@ -105,7 +100,6 @@ class ProbSparseAttention(nn.Module):
         self.factor = factor
         self.custom_scale_factor = custom_scale_factor
         self.is_causal = is_causal
-        self.output_attention_scores = output_attention_scores
         self.strict_mode = strict_mode
         self.dropout = nn.Dropout(dropout_rate)
 
@@ -261,7 +255,7 @@ class ProbSparseAttention(nn.Module):
         top_query_scores: Tensor,
         top_query_indices: Tensor,
         num_queries: int,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Updates the default context using the selected queries.
 
@@ -272,9 +266,7 @@ class ProbSparseAttention(nn.Module):
         context (`S` in step 8 of the algorithm).
 
         In causal attention, scores for future key positions are masked before
-        the attention weights are calculated. When attention weights are
-        requested, unselected queries retain uniform rows and selected queries
-        receive their calculated weights.
+        the attention weights are calculated.
 
         Args:
             context (Tensor): Default context tensor of shape [batch_size,
@@ -292,10 +284,8 @@ class ProbSparseAttention(nn.Module):
         Returns:
             context (Tensor): Final context tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Tensor | None): Approximate dense attention weights,
-                or None when attention weights are not requested.
         """
-        batch_size, num_heads, num_values, _ = value.shape
+        batch_size, num_heads = value.shape[:2]
 
         if self.is_causal:
             selected_query_causal_mask = _make_selected_query_causal_mask(
@@ -325,27 +315,7 @@ class ProbSparseAttention(nn.Module):
             :,
         ] = torch.matmul(top_query_weights, value).type_as(context)
 
-        if self.output_attention_scores:
-            attn_weights = (
-                (
-                    torch.ones([batch_size, num_heads, num_queries, num_values])
-                    / num_values
-                )
-                .type_as(top_query_weights)
-                .to(top_query_weights.device)
-            )
-
-            attn_weights[
-                torch.arange(batch_size)[:, None, None],
-                torch.arange(num_heads)[None, :, None],
-                top_query_indices,
-                :,
-            ] = top_query_weights
-
-            return (context, attn_weights)
-
-        else:
-            return (context, None)
+        return context
 
     def forward(
         self,
@@ -353,7 +323,7 @@ class ProbSparseAttention(nn.Module):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Computes ProbSparse attention.
 
@@ -368,9 +338,8 @@ class ProbSparseAttention(nn.Module):
                 are not supported.
 
         Returns:
-            tuple[Tensor, Tensor | None]: The attention output and, when
-                requested, calculated weights for selected queries with
-                uniform weights for unselected queries.
+            Tensor: Attention output of shape [batch_size, num_heads,
+                num_queries, head_dim].
 
         Raises:
             ValueError: If a custom attention mask is supplied, an input shape
@@ -430,12 +399,10 @@ class ProbSparseAttention(nn.Module):
             num_queries=num_queries,
         )
         # update the context with selected top_k queries
-        attn_output, attn_weights = self._update_context_with_selected_queries(
-            attn_output,
-            value,
-            top_query_scores,
-            top_query_indices,
-            num_queries,
+        return self._update_context_with_selected_queries(
+            context=attn_output,
+            value=value,
+            top_query_scores=top_query_scores,
+            top_query_indices=top_query_indices,
+            num_queries=num_queries,
         )
-
-        return attn_output, attn_weights
