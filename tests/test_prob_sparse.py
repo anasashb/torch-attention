@@ -214,7 +214,6 @@ def test_prob_sparse_rejects_non_positive_factors(factor: int) -> None:
             is_causal=False,
             factor=factor,
             dropout_rate=0.0,
-            output_attention_scores=False,
         )
 
     assert str(error.value) == (
