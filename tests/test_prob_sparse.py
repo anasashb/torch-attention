@@ -250,7 +250,6 @@ def test_prob_sparse_rejects_non_four_dimensional_qkv_tensors(
         is_causal=False,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=False,
         strict_mode=True,
     )
 
