@@ -143,7 +143,7 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
-    attention: LinearAttention | ProbSparseAttention | ScaledDotProductAttention
+    attention: LinearAttention | ProbSparseAttention
 
     if mechanism == "adlers-probsparse":
         attention = ProbSparseAttention(
@@ -159,13 +159,26 @@ def _make_attention_call(
             output_attention_scores=False,
         )
     else:
-        attention = ScaledDotProductAttention(
+        scaled_dot_product_attention = ScaledDotProductAttention(
             is_causal=is_causal,
             dropout_rate=0.0,
-            output_attention_scores=False,
             strict_mode=True,
             backend="sdpa" if mechanism == "adlers-sdpa" else "einsum",
         )
+        scaled_dot_product_attention = scaled_dot_product_attention.to(
+            device=query.device
+        )
+        scaled_dot_product_attention.train(mode=training)
+
+        def call_scaled_dot_product_attention() -> Tensor:
+            return scaled_dot_product_attention(
+                query=query,
+                key=key,
+                value=value,
+                attn_mask=None,
+            )
+
+        return call_scaled_dot_product_attention
 
     attention = attention.to(device=query.device)
 
