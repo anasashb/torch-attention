@@ -190,7 +190,6 @@ def test_prob_sparse_rejects_custom_attention_masks() -> None:
         is_causal=False,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=False,
     )
 
     with pytest.raises(ValueError) as error:
