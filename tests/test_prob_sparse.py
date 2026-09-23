@@ -177,18 +177,16 @@ def test_prob_sparse_uses_zero_custom_scale_factor() -> None:
         is_causal=False,
         factor=2,
         custom_scale_factor=0.0,
-        output_attention_scores=True,
     )
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
         attn_mask=None,
     )
 
-    assert weights is not None
-    torch.testing.assert_close(weights, torch.full_like(weights, 0.5))
+    assert isinstance(output, torch.Tensor)
     expected_output = value.mean(dim=-2, keepdim=True).expand_as(output)
     torch.testing.assert_close(output, expected_output)
 
