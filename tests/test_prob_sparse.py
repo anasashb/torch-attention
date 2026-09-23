@@ -275,7 +275,6 @@ def test_prob_sparse_rejects_nonzero_dropout_rate() -> None:
             is_causal=False,
             factor=1,
             dropout_rate=0.1,
-            output_attention_scores=False,
         )
 
     assert str(error.value) == (
