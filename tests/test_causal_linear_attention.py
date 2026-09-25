@@ -199,7 +199,7 @@ def test_causal_linear_attention_preserves_query_dtype() -> None:
 
     try:
         torch.set_default_dtype(torch.float64)
-        output, _ = attention(
+        output = attention(
             query=query,
             key=query,
             value=query,
