@@ -167,7 +167,6 @@ def _make_attention_call(
         attention = LinearAttention(
             is_causal=is_causal,
             dropout_rate=0.0,
-            output_attention_scores=False,
         )
     else:
         scaled_dot_product_attention = ScaledDotProductAttention(
@@ -196,13 +195,12 @@ def _make_attention_call(
     attention.train(mode=training)
 
     def call_adlers() -> Tensor:
-        output, _ = attention(
+        return attention(
             query=query,
             key=key,
             value=value,
             attn_mask=None,
         )
-        return output
 
     return call_adlers
 
