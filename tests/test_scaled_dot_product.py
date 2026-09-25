@@ -417,9 +417,9 @@ def test_scaled_dot_product_rejects_non_four_dimensional_qkv_tensors(
         ),
         pytest.param(
             (2, 4, 5, 5),
-            "Query, key, and value head dimensions must match; got query head "
-            "dimension 6, key head dimension 5, and value head dimension 6. "
-            "Use the same head dimension for all three tensors.",
+            "Query and key head dimensions must match; got query head "
+            "dimension 6 and key head dimension 5. Use the same head "
+            "dimension for both tensors.",
             id="head-dimension",
         ),
     ],
