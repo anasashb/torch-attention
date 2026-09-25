@@ -60,7 +60,7 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
     eps = 1e-6
     attention = LinearAttention(is_causal=True, eps=eps)
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -100,7 +100,6 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
         grad_outputs=output_gradient,
     )
 
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
     for actual_gradient, expected_gradient in zip(
         actual_gradients,
