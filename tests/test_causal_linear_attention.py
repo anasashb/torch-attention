@@ -124,7 +124,7 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
         eps=0.0,
     )
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -132,7 +132,6 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
     )
 
     expected_output = torch.tensor([[[[2.0], [2.0]]]])
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
