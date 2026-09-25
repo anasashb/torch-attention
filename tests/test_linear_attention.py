@@ -111,7 +111,7 @@ def test_linear_attention_applies_key_padding_mask() -> None:
     attn_mask = torch.tensor([[[[False, True]]]])
     attention = LinearAttention(feature_map=torch.ones_like, eps=0.0)
 
-    output, _ = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
