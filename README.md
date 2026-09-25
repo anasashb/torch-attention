@@ -23,15 +23,14 @@ key = torch.randn(2, 4, 16, 32)
 value = torch.randn(2, 4, 16, 32)
 
 attention = ScaledDotProductAttention(backend="sdpa")
-output, weights = attention(query=query, key=key, value=value)
+output = attention(query=query, key=key, value=value)
 
 print(output.shape)
-print(weights)
 ```
 
-Use `backend="einsum"` when attention weights are needed. Use `backend="sdpa"`
-to delegate to PyTorch's optimized scaled dot-product attention implementation
-when weights are not needed.
+Use `backend="einsum"` for the explicit einsum implementation, or
+`backend="sdpa"` to delegate to PyTorch's optimized scaled dot-product
+attention implementation.
 
 ### ProbSparse attention
 
@@ -40,7 +39,7 @@ when weights are not needed.
 
 ```python
 attention = ProbSparseAttention(is_causal=True)
-output, weights = attention(query=query, key=key, value=value)
+output = attention(query=query, key=key, value=value)
 ```
 
 Custom attention masks and nonzero dropout are not currently supported, because
@@ -53,7 +52,7 @@ the original implementation does not support them.
 
 ```python
 attention = LinearAttention(is_causal=False)
-output, _ = attention(query=query, key=key, value=value)
+output = attention(query=query, key=key, value=value)
 ```
 
 Set `is_causal=True` for causal Linear Attention. Non-causal attention allows
@@ -91,8 +90,7 @@ The supported mask shapes are:
 
 The smaller forms broadcast across batches or heads. When `is_causal=True`, a
 supplied mask is applied together with the causal mask. If every key is masked
-for a query, its output is zero. The `einsum` backend also returns zero
-attention weights for that query.
+for a query, its output is zero.
 
 ## Project status
 
