@@ -70,7 +70,7 @@ def test_linear_attention_matches_quadratic_reference(
     eps = 1e-6
     attention = LinearAttention(eps=eps)
 
-    output, _ = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
