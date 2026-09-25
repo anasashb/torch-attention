@@ -37,7 +37,7 @@ def test_linear_attention_applies_causal_attention() -> None:
         is_causal=True,
     )
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -45,7 +45,6 @@ def test_linear_attention_applies_causal_attention() -> None:
     )
 
     expected_output = torch.tensor([[[[2.0], [3.0]]]])
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
