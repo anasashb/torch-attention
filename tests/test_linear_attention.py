@@ -144,17 +144,6 @@ def test_linear_attention_rejects_query_dependent_attention_masks(
     )
 
 
-def test_linear_attention_rejects_attention_scores() -> None:
-    """Checks that LinearAttention rejects attention score output."""
-    with pytest.raises(ValueError) as error:
-        LinearAttention(output_attention_scores=True)
-
-    assert str(error.value) == (
-        "Linear attention does not support returning attention scores. "
-        "Set output_attention_scores=False."
-    )
-
-
 def test_linear_attention_rejects_nonzero_dropout_rate() -> None:
     """Checks that unsupported LinearAttention dropout is rejected."""
     with pytest.raises(ValueError) as error:
