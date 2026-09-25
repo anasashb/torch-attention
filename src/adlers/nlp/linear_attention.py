@@ -52,8 +52,6 @@ class LinearAttention(Module):
         eps (float): Small value added to the normalization denominator for
             numerical stability.
         dropout_rate (float): Dropout rate. Only 0.0 is supported.
-        output_attention_scores (bool): Whether to return attention scores.
-            Only False is supported.
 
     Attributes:
         is_causal (bool): Whether causal attention is enabled.
@@ -68,18 +66,11 @@ class LinearAttention(Module):
         feature_map: Callable[[Tensor], Tensor] | None = None,
         eps: float = 1e-6,
         dropout_rate: float = 0.0,
-        output_attention_scores: bool = False,
     ) -> None:
         if dropout_rate != 0.0:
             raise ValueError(
                 "Linear attention does not support dropout; "
                 f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
-            )
-
-        if output_attention_scores:
-            raise ValueError(
-                "Linear attention does not support returning attention scores. "
-                "Set output_attention_scores=False."
             )
 
         super().__init__()
@@ -161,7 +152,7 @@ class LinearAttention(Module):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> tuple[Tensor, None]:
+    ) -> Tensor:
         """
         Computes Linear Attention.
 
@@ -177,8 +168,8 @@ class LinearAttention(Module):
                 that should be masked out.
 
         Returns:
-            tuple[Tensor, None]: The attention output of shape [batch_size,
-                num_heads, num_queries, value_head_dim] and None.
+            Tensor: Attention output of shape [batch_size, num_heads,
+                num_queries, value_head_dim].
 
         Raises:
             ValueError: If the input shapes are incompatible or the attention
@@ -259,4 +250,4 @@ class LinearAttention(Module):
                 value=value,
             )
 
-        return attn_output.contiguous(), None
+        return attn_output.contiguous()
