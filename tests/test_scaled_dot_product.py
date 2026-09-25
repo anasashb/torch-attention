@@ -451,6 +451,28 @@ def test_scaled_dot_product_rejects_qkv_shape_mismatches(
     assert str(error.value) == expected_message
 
 
+@pytest.mark.parametrize("backend", ("einsum", "sdpa"))
+def test_scaled_dot_product_allows_different_value_head_dimension(
+    backend: AttentionBackend,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that value head width can differ from query and key width."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+        head_dim=6,
+    )
+    value = value[..., :4]
+    attention = ScaledDotProductAttention(backend=backend, strict_mode=True)
+
+    output = attention(query=query, key=key, value=value)
+    expected = F.scaled_dot_product_attention(query=query, key=key, value=value)
+
+    torch.testing.assert_close(actual=output, expected=expected)
+
+
 def test_scaled_dot_product_combines_causal_and_explicit_masks(
     make_qkv: MakeQKV,
 ) -> None:
