@@ -12,7 +12,7 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     value = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]]).repeat(1, 3, 1, 1)
     attention = LinearAttention(eps=1e-6)
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -22,7 +22,7 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     expected_output = torch.tensor(
         [[[[1.77024138, 2.77024126], [2.22975802, 3.22975779]]]]
     ).repeat(1, 3, 1, 1)
-    assert attn_weights is None
+    assert isinstance(output, torch.Tensor)
     torch.testing.assert_close(output, expected_output)
 
 
