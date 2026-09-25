@@ -93,7 +93,7 @@ def test_linear_attention_accepts_tensor_feature_map() -> None:
     value = torch.tensor([[[[2.0], [4.0]]]])
     attention = LinearAttention(feature_map=torch.ones_like, eps=0.0)
 
-    output, _ = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
