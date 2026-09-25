@@ -143,55 +143,28 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
-    attention: LinearAttention
+    attention: ProbSparseAttention | LinearAttention | ScaledDotProductAttention
 
     if mechanism == "adlers-probsparse":
-        prob_sparse_attention = ProbSparseAttention(
+        attention = ProbSparseAttention(
             is_causal=is_causal,
             dropout_rate=0.0,
             strict_mode=True,
         )
-        prob_sparse_attention = prob_sparse_attention.to(device=query.device)
-        prob_sparse_attention.train(mode=training)
-
-        def call_prob_sparse_attention() -> Tensor:
-            return prob_sparse_attention(
-                query=query,
-                key=key,
-                value=value,
-                attn_mask=None,
-            )
-
-        return call_prob_sparse_attention
     elif mechanism == "adlers-linear":
         attention = LinearAttention(
             is_causal=is_causal,
             dropout_rate=0.0,
         )
     else:
-        scaled_dot_product_attention = ScaledDotProductAttention(
+        attention = ScaledDotProductAttention(
             is_causal=is_causal,
             dropout_rate=0.0,
             strict_mode=True,
             backend="sdpa" if mechanism == "adlers-sdpa" else "einsum",
         )
-        scaled_dot_product_attention = scaled_dot_product_attention.to(
-            device=query.device
-        )
-        scaled_dot_product_attention.train(mode=training)
-
-        def call_scaled_dot_product_attention() -> Tensor:
-            return scaled_dot_product_attention(
-                query=query,
-                key=key,
-                value=value,
-                attn_mask=None,
-            )
-
-        return call_scaled_dot_product_attention
 
     attention = attention.to(device=query.device)
-
     attention.train(mode=training)
 
     def call_adlers() -> Tensor:
