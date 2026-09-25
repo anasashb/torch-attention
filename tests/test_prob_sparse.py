@@ -105,6 +105,27 @@ def test_prob_sparse_supports_different_query_and_key_lengths(
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
+def test_prob_sparse_supports_different_value_head_dimension(
+    is_causal: bool,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that the output uses the value head dimension."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=3,
+        num_queries=4,
+        num_keys=4,
+        head_dim=6,
+    )
+    value = value[..., :4]
+    attention = ProbSparseAttention(is_causal=is_causal, factor=1)
+
+    output = attention(query=query, key=key, value=value, attn_mask=None)
+
+    assert output.shape == (2, 3, 4, 4)
+
+
+@pytest.mark.parametrize("is_causal", [False, True])
 def test_prob_sparse_supports_single_position_sequences(
     is_causal: bool,
     make_qkv: MakeQKV,
