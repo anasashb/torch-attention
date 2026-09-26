@@ -133,8 +133,8 @@ class AttentionBase(nn.Module, ABC):
         """
         raise NotImplementedError("Subclasses must implement _attend()")
 
-    @staticmethod
     def _validate_shapes(
+        self,
         query: Tensor,
         key: Tensor,
         value: Tensor,
@@ -185,7 +185,20 @@ class AttentionBase(nn.Module, ABC):
             key=key,
             value=value,
         )
+        # Linear Attention needs to override this
+        self._validate_attn_mask_shape(
+            query=query,
+            key=key,
+            attn_mask=attn_mask,
+        )
 
+    @staticmethod
+    def _validate_attn_mask_shape(
+        query: Tensor,
+        key: Tensor,
+        attn_mask: Tensor | None,
+    ) -> None:
+        """Validates an attention mask against the query and key shapes."""
         # Short-hand notations for shapes
         Bq, Hq, Lq, _ = query.shape
         _, _, Lk, _ = key.shape
