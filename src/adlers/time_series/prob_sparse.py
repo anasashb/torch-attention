@@ -64,7 +64,8 @@ class ProbSparseAttention(AttentionBase):
         custom_scale_factor (float | None): Scale applied to selected
             query-key scores. When None, defaults to the inverse square root
             of the query head dimension.
-        dropout_rate (float): Dropout rate. Only 0.0 is supported.
+        dropout_rate (float): Only 0.0 is supported in strict mode.
+            Other values are ignored when strict mode is off.
         strict_mode (bool): Whether input shapes are validated on every call.
 
     Attributes:
@@ -87,7 +88,7 @@ class ProbSparseAttention(AttentionBase):
                 f"ProbSparse factor must be greater than 0; got {factor}."
             )
 
-        if dropout_rate != 0.0:
+        if strict_mode and dropout_rate != 0.0:
             raise ValueError(
                 "ProbSparse attention does not support dropout; "
                 f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
@@ -95,7 +96,7 @@ class ProbSparseAttention(AttentionBase):
 
         super().__init__(
             is_causal=is_causal,
-            dropout_rate=dropout_rate,
+            dropout_rate=0.0,
             strict_mode=strict_mode,
             custom_scale_factor=custom_scale_factor,
         )
