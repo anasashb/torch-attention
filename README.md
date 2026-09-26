@@ -72,12 +72,13 @@ attention heads already split:
 ```text
 query: [batch_size, num_heads, num_queries, head_dim]
 key:   [batch_size, num_heads, num_keys, head_dim]
-value: [batch_size, num_heads, num_keys, head_dim]
+value: [batch_size, num_heads, num_keys, value_head_dim]
 ```
 
 The query and key lengths can differ, so the same module works for both
 self-attention and cross-attention. But key and value lengths must match. Batch
-size, head count, and head dimension must match across all three tensors.
+size and head count must match across all three tensors. Query and key head
+dimensions must match; the value head dimension may differ.
 
 For now, attention masks must use `torch.bool`. `True` marks a position that
 should be masked out, while `False` marks a position that can be attended to.
