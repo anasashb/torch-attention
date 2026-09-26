@@ -155,6 +155,27 @@ def test_linear_attention_rejects_nonzero_dropout_rate() -> None:
     )
 
 
+def test_linear_attention_ignores_dropout_outside_strict_mode() -> None:
+    """Checks that nonzero dropout is ignored when strict mode is off."""
+    query = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
+    attention = LinearAttention(
+        feature_map=torch.ones_like,
+        eps=0.0,
+        dropout_rate=1.0,
+        strict_mode=False,
+    )
+
+    output = attention(
+        query=query,
+        key=query,
+        value=value,
+        attn_mask=None,
+    )
+
+    torch.testing.assert_close(output, torch.full_like(value, 3.0))
+
+
 @pytest.mark.parametrize("is_causal", [False, True])
 def test_linear_attention_rejects_non_boolean_key_padding_masks(
     is_causal: bool,
