@@ -201,7 +201,8 @@ def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
     )
 
 
-def test_prob_sparse_rejects_custom_attention_masks() -> None:
+@pytest.mark.parametrize("strict_mode", [False, True])
+def test_prob_sparse_rejects_custom_attention_masks(strict_mode: bool) -> None:
     """Checks that ProbSparse rejects unsupported custom attention masks."""
     query = torch.zeros(1, 1, 3, 2)
     key = torch.zeros(1, 1, 3, 2)
@@ -211,6 +212,7 @@ def test_prob_sparse_rejects_custom_attention_masks() -> None:
         is_causal=False,
         factor=1,
         dropout_rate=0.0,
+        strict_mode=strict_mode,
     )
 
     with pytest.raises(ValueError) as error:
