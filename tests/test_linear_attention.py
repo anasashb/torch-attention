@@ -129,14 +129,19 @@ def test_linear_attention_applies_key_padding_mask() -> None:
     ],
 )
 @pytest.mark.parametrize("is_causal", [False, True])
+@pytest.mark.parametrize("strict_mode", [False, True])
 def test_linear_attention_rejects_unsupported_attention_masks(
     attn_mask_shape: tuple[int, ...],
     is_causal: bool,
+    strict_mode: bool,
 ) -> None:
     """Checks that LinearAttention rejects unsupported mask shapes."""
     query = torch.zeros((1, 1, 2, 2))
     attn_mask = torch.zeros(size=attn_mask_shape, dtype=torch.bool)
-    attention = LinearAttention(is_causal=is_causal)
+    attention = LinearAttention(
+        is_causal=is_causal,
+        strict_mode=strict_mode,
+    )
 
     with pytest.raises(ValueError) as error:
         attention(
