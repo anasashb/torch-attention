@@ -185,7 +185,7 @@ class LinearAttention(AttentionBase):
             RuntimeError: If causal attention's compiled operation is
                 unavailable for the input device.
         """
-        if attn_mask is not None:
+        if attn_mask is not None and not self.strict_mode:
             self._validate_attn_mask_shape(
                 query=query,
                 key=key,

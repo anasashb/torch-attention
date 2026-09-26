@@ -85,6 +85,9 @@ class ScaledDotProductAttention(AttentionBase):
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
         """
+        if attn_mask is not None:
+            attn_mask = self._normalize_attn_mask(attn_mask=attn_mask)
+
         scale_factor = self._get_scale_factor(key=key)
 
         if self.backend == "einsum":

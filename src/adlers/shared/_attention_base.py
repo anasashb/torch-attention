@@ -44,8 +44,8 @@ class AttentionBase(nn.Module, ABC):
     ) -> Tensor:
         """
         Forward method inherited by all child classes of AttentionBase.
-        Includes shared logic such as mask shape normalization (adjustment),
-        Q, K, V, mask shape validation. Attention computation is then
+        Includes shared logic such as mask dtype validation and Q, K, V, and
+        mask shape validation. Attention computation is then
         delegated to the abstract ._attend() method.
 
         Args:
@@ -75,7 +75,6 @@ class AttentionBase(nn.Module, ABC):
         """
         if attn_mask is not None:
             self._validate_attn_mask_dtype(attn_mask=attn_mask)
-            attn_mask = self._normalize_attn_mask(attn_mask=attn_mask)
 
         # Validate input shapes if using strict mode
         if self.strict_mode:
@@ -120,10 +119,10 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
-                [batch_size, num_heads, num_queries, num_keys]. True marks
-                positions that should be masked out, and False marks positions
-                that can be attended to.
+            attn_mask (Optional[Tensor]): Boolean mask in a shape supported
+                by the attention mechanism. True marks positions that should
+                be masked out, and False marks positions that can be attended
+                to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
@@ -203,14 +202,15 @@ class AttentionBase(nn.Module, ABC):
 
         if attn_mask is not None and attn_mask.shape not in [
             (Lq, Lk),
+            (Bq, Lq, Lk),
             (Bq, 1, Lq, Lk),
             (Bq, Hq, Lq, Lk),
         ]:
             raise ValueError(
                 f"Invalid mask shape {attn_mask.shape}, expected "
-                "(num_queries, num_keys), (batch_size, 1, num_queries, "
-                "num_keys), or (batch_size, num_heads, num_queries, "
-                "num_keys)."
+                "(num_queries, num_keys), (batch_size, num_queries, "
+                "num_keys), (batch_size, 1, num_queries, num_keys), or "
+                "(batch_size, num_heads, num_queries, num_keys)."
             )
 
     @staticmethod
