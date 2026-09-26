@@ -13,11 +13,8 @@
 #
 # Equation and algorithm references below refer to this paper.
 
-from math import sqrt
-
 import numpy as np
 import torch
-import torch.nn as nn
 from torch import Tensor
 
 from adlers.shared._attention_base import AttentionBase
@@ -51,7 +48,7 @@ def _make_selected_query_causal_mask(
     return selected_query_mask.view(scores.shape).to(device)
 
 
-class ProbSparseAttention(nn.Module):
+class ProbSparseAttention(AttentionBase):
     """
     Implements Informer's ProbSparse attention mechanism.
 
@@ -96,12 +93,13 @@ class ProbSparseAttention(nn.Module):
                 f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
             )
 
-        super().__init__()
+        super().__init__(
+            is_causal=is_causal,
+            dropout_rate=dropout_rate,
+            strict_mode=strict_mode,
+            custom_scale_factor=custom_scale_factor,
+        )
         self.factor = factor
-        self.custom_scale_factor = custom_scale_factor
-        self.is_causal = is_causal
-        self.strict_mode = strict_mode
-        self.dropout = nn.Dropout(dropout_rate)
 
     def _compute_top_query_scores(
         self,
@@ -352,16 +350,23 @@ class ProbSparseAttention(nn.Module):
                 f"got shape {tuple(attn_mask.shape)}. Pass attn_mask=None."
             )
 
-        # borrowing _validate_shapes from AttentionBase w/o inheriting yet
-        if self.strict_mode:
-            AttentionBase._validate_shapes(
-                query=query,
-                key=key,
-                value=value,
-                attn_mask=None,
-            )
+        return super().forward(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
 
-        batch_size, num_heads, num_queries, head_dim = query.shape
+    def _attend(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        scale_factor: float,
+        attn_mask: Tensor | None,
+    ) -> Tensor:
+        """Computes the ProbSparse context for the supplied tensors."""
+        _, _, num_queries, _ = query.shape
         _, _, num_keys, _ = key.shape
 
         num_sampled_keys = max(
@@ -386,12 +391,6 @@ class ProbSparseAttention(nn.Module):
             num_sampled_keys=num_sampled_keys,
             num_top_queries=num_top_queries,
         )
-
-        # add scale factor
-        if self.custom_scale_factor is not None:
-            scale_factor = self.custom_scale_factor
-        else:
-            scale_factor = 1.0 / sqrt(head_dim)
 
         top_query_scores = top_query_scores * scale_factor
         attn_output = self._make_default_context(
