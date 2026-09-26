@@ -332,13 +332,13 @@ class ProbSparseAttention(AttentionBase):
             key (Tensor): Key tensor of shape [batch_size, num_heads,
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
-                num_keys, head_dim].
+                num_keys, value_head_dim].
             attn_mask (Tensor | None): Must be None. Custom attention masks
                 are not supported.
 
         Returns:
             Tensor: Attention output of shape [batch_size, num_heads,
-                num_queries, head_dim].
+                num_queries, value_head_dim].
 
         Raises:
             ValueError: If a custom attention mask is supplied, an input shape

@@ -54,7 +54,7 @@ class AttentionBase(nn.Module, ABC):
             key (Tensor): Key tensor of shape [batch_size, num_heads,
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
-                num_values, head_dim].
+                num_values, value_head_dim].
             attn_mask (Optional[Tensor]): Boolean attention mask tensor of
                 either:
                 a 2D shape of [num_queries, num_keys],
@@ -66,7 +66,7 @@ class AttentionBase(nn.Module, ABC):
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
-                num_heads, num_queries, head_dim].
+                num_heads, num_queries, value_head_dim].
 
         Raises:
             TypeError: If attn_mask is not a torch.bool tensor.

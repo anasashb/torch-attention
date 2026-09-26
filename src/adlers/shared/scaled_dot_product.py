@@ -10,9 +10,10 @@ class ScaledDotProductAttention(AttentionBase):
     """
     Scaled dot-product attention with selectable computation backends.
 
-    Query, key, and value tensors must have shape [batch_size, num_heads,
-    sequence_length, head_dim]. Query and key lengths may differ, but key and
-    value lengths must match.
+    Query and key tensors must have shape [batch_size, num_heads,
+    sequence_length, head_dim]. Value tensors may have a different head
+    dimension. Query and key lengths may differ, but key and value lengths
+    must match.
 
     The "einsum" backend computes attention explicitly with PyTorch tensor
     operations. The "sdpa" backend delegates to
