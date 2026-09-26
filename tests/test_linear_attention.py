@@ -121,13 +121,21 @@ def test_linear_attention_applies_key_padding_mask() -> None:
     torch.testing.assert_close(output, torch.tensor([[[[2.0]]]]))
 
 
+@pytest.mark.parametrize(
+    "attn_mask_shape",
+    [
+        pytest.param((2, 2), id="2d-pairwise"),
+        pytest.param((1, 1, 2), id="3d-key-padding"),
+    ],
+)
 @pytest.mark.parametrize("is_causal", [False, True])
-def test_linear_attention_rejects_query_dependent_attention_masks(
+def test_linear_attention_rejects_unsupported_attention_masks(
+    attn_mask_shape: tuple[int, ...],
     is_causal: bool,
 ) -> None:
-    """Checks that LinearAttention rejects query-dependent masks."""
+    """Checks that LinearAttention rejects unsupported mask shapes."""
     query = torch.zeros((1, 1, 2, 2))
-    attn_mask = torch.zeros((2, 2), dtype=torch.bool)
+    attn_mask = torch.zeros(size=attn_mask_shape, dtype=torch.bool)
     attention = LinearAttention(is_causal=is_causal)
 
     with pytest.raises(ValueError) as error:
@@ -140,7 +148,7 @@ def test_linear_attention_rejects_query_dependent_attention_masks(
 
     assert str(error.value) == (
         "Linear attention only supports key-padding masks shaped "
-        "[batch_size, 1, 1, num_keys]; got shape (2, 2)."
+        f"[batch_size, 1, 1, num_keys]; got shape {attn_mask_shape}."
     )
 
 
