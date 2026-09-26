@@ -86,21 +86,21 @@ class AttentionBase(nn.Module, ABC):
                 attn_mask=attn_mask,
             )
 
-        # Generate scale factor if not provided
-        if self.custom_scale_factor is not None:
-            scale_factor = self.custom_scale_factor
-        else:
-            _, _, _, head_dim = key.shape
-            scale_factor = 1.0 / sqrt(head_dim)
-
         # Core computations
         return self._attend(
             query=query,
             key=key,
             value=value,
-            scale_factor=scale_factor,
             attn_mask=attn_mask,
         )
+
+    def _get_scale_factor(self, key: Tensor) -> float:
+        """Returns the configured scale or the default query-key scale."""
+        if self.custom_scale_factor is not None:
+            return self.custom_scale_factor
+
+        _, _, _, head_dim = key.shape
+        return 1.0 / sqrt(head_dim)
 
     @abstractmethod
     def _attend(
@@ -108,7 +108,6 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        scale_factor: float,
         attn_mask: Tensor | None,
     ) -> Tensor:
         """
@@ -121,7 +120,6 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            scale_factor (float): Scale factor to multiply raw scores by.
             attn_mask (Optional[Tensor]): Boolean mask broadcastable to
                 [batch_size, num_heads, num_queries, num_keys]. True marks
                 positions that should be masked out, and False marks positions

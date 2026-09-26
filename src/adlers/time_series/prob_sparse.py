@@ -362,10 +362,10 @@ class ProbSparseAttention(AttentionBase):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        scale_factor: float,
         attn_mask: Tensor | None,
     ) -> Tensor:
         """Computes the ProbSparse context for the supplied tensors."""
+        scale_factor = self._get_scale_factor(key=key)
         _, _, num_queries, _ = query.shape
         _, _, num_keys, _ = key.shape
 

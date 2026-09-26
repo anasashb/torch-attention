@@ -66,7 +66,6 @@ class ScaledDotProductAttention(AttentionBase):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        scale_factor: float,
         attn_mask: Tensor | None,
     ) -> Tensor:
         """
@@ -79,7 +78,6 @@ class ScaledDotProductAttention(AttentionBase):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            scale_factor (float): Scale factor to multiply raw scores by.
             attn_mask (Optional[Tensor]): Boolean mask broadcastable to
                 [batch_size, num_heads, num_queries, num_keys].
 
@@ -87,6 +85,8 @@ class ScaledDotProductAttention(AttentionBase):
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
         """
+        scale_factor = self._get_scale_factor(key=key)
+
         if self.backend == "einsum":
             return self._attend_einsum(
                 query=query,
