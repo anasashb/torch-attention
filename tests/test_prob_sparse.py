@@ -302,3 +302,23 @@ def test_prob_sparse_rejects_nonzero_dropout_rate() -> None:
         "ProbSparse attention does not support dropout; got dropout_rate 0.1. "
         "Set dropout_rate=0.0."
     )
+
+
+def test_prob_sparse_ignores_dropout_outside_strict_mode() -> None:
+    """Checks that nonzero dropout is ignored when strict mode is off."""
+    query = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
+    attention = ProbSparseAttention(
+        factor=1,
+        dropout_rate=1.0,
+        strict_mode=False,
+    )
+
+    output = attention(
+        query=query,
+        key=query,
+        value=value,
+        attn_mask=None,
+    )
+
+    torch.testing.assert_close(output, torch.full_like(value, 3.0))
