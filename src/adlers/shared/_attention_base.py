@@ -13,8 +13,6 @@ class AttentionBase(nn.Module, ABC):
         is_causal (bool): Whether to prevent queries from attending to future
             key positions.
         dropout_rate (float): Dropout rate.
-        output_attention_scores (bool): Whether forward() should return
-            attention weights.
         strict_mode (bool): Whether to explicitly validate tensor shapes
             at each forward call.
         custom_scale_factor (Optional[float]): Custom attention scaling factor.
@@ -26,7 +24,6 @@ class AttentionBase(nn.Module, ABC):
         self,
         is_causal: bool = False,
         dropout_rate: float = 0.0,
-        output_attention_scores: bool = False,
         strict_mode: bool = True,
         custom_scale_factor: float | None = None,
     ) -> None:
@@ -35,7 +32,6 @@ class AttentionBase(nn.Module, ABC):
         self.dropout = (
             nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity()
         )
-        self.output_attention_scores = output_attention_scores
         self.strict_mode = strict_mode
         self.custom_scale_factor = custom_scale_factor
 
@@ -45,11 +41,11 @@ class AttentionBase(nn.Module, ABC):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Forward method inherited by all child classes of AttentionBase.
-        Includes shared logic such as mask shape normalization (adjustment),
-        Q, K, V, mask shape validation. Attention computation is then
+        Includes shared logic such as mask dtype validation and Q, K, V, and
+        mask shape validation. Attention computation is then
         delegated to the abstract ._attend() method.
 
         Args:
@@ -58,7 +54,7 @@ class AttentionBase(nn.Module, ABC):
             key (Tensor): Key tensor of shape [batch_size, num_heads,
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
-                num_values, head_dim].
+                num_values, value_head_dim].
             attn_mask (Optional[Tensor]): Boolean attention mask tensor of
                 either:
                 a 2D shape of [num_queries, num_keys],
@@ -70,9 +66,7 @@ class AttentionBase(nn.Module, ABC):
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
-                num_heads, num_queries, head_dim].
-            attn_weights (Optional[Tensor]): Attention weights tensor of shape
-                [batch_size, num_heads, num_queries, num_keys].
+                num_heads, num_queries, value_head_dim].
 
         Raises:
             TypeError: If attn_mask is not a torch.bool tensor.
@@ -81,7 +75,6 @@ class AttentionBase(nn.Module, ABC):
         """
         if attn_mask is not None:
             self._validate_attn_mask_dtype(attn_mask=attn_mask)
-            attn_mask = self._normalize_attn_mask(attn_mask=attn_mask)
 
         # Validate input shapes if using strict mode
         if self.strict_mode:
@@ -92,27 +85,21 @@ class AttentionBase(nn.Module, ABC):
                 attn_mask=attn_mask,
             )
 
-        # Generate scale factor if not provided
-        if self.custom_scale_factor is not None:
-            scale_factor = self.custom_scale_factor
-        else:
-            _, _, _, head_dim = key.shape
-            scale_factor = 1.0 / sqrt(head_dim)
-
         # Core computations
-        attn_output, attn_weights = self._attend(
+        return self._attend(
             query=query,
             key=key,
             value=value,
-            scale_factor=scale_factor,
             attn_mask=attn_mask,
         )
 
-        return (
-            (attn_output, attn_weights)
-            if self.output_attention_scores
-            else (attn_output, None)
-        )
+    def _get_scale_factor(self, key: Tensor) -> float:
+        """Returns the configured scale or the default query-key scale."""
+        if self.custom_scale_factor is not None:
+            return self.custom_scale_factor
+
+        _, _, _, head_dim = key.shape
+        return 1.0 / sqrt(head_dim)
 
     @abstractmethod
     def _attend(
@@ -120,9 +107,8 @@ class AttentionBase(nn.Module, ABC):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        scale_factor: float,
         attn_mask: Tensor | None,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> Tensor:
         """
         Core attention method that will be overridden in subclasses.
 
@@ -133,22 +119,19 @@ class AttentionBase(nn.Module, ABC):
                 num_keys, head_dim].
             value (Tensor): Value tensor of shape [batch_size, num_heads,
                 num_values, head_dim].
-            scale_factor (float): Scale factor to multiply raw scores by.
-            attn_mask (Optional[Tensor]): Boolean mask broadcastable to
-                [batch_size, num_heads, num_queries, num_keys]. True marks
-                positions that should be masked out, and False marks positions
-                that can be attended to.
+            attn_mask (Optional[Tensor]): Boolean mask in a shape supported
+                by the attention mechanism. True marks positions that should
+                be masked out, and False marks positions that can be attended
+                to.
 
         Returns:
             attn_output (Tensor): Attention output tensor of shape [batch_size,
                 num_heads, num_queries, head_dim].
-            attn_weights (Optional[Tensor]): Attention weights tensor of shape
-                [batch_size, num_heads, num_queries, num_keys].
         """
         raise NotImplementedError("Subclasses must implement _attend()")
 
-    @staticmethod
     def _validate_shapes(
+        self,
         query: Tensor,
         key: Tensor,
         value: Tensor,
@@ -191,30 +174,43 @@ class AttentionBase(nn.Module, ABC):
             key=key,
             value=value,
         )
-        AttentionBase._validate_qkv_head_dimensions(
+        AttentionBase._validate_qk_head_dimensions(
             query=query,
             key=key,
-            value=value,
         )
         AttentionBase._validate_kv_sequence_lengths(
             key=key,
             value=value,
         )
+        # Linear Attention needs to override this
+        self._validate_attn_mask_shape(
+            query=query,
+            key=key,
+            attn_mask=attn_mask,
+        )
 
+    @staticmethod
+    def _validate_attn_mask_shape(
+        query: Tensor,
+        key: Tensor,
+        attn_mask: Tensor | None,
+    ) -> None:
+        """Validates an attention mask against the query and key shapes."""
         # Short-hand notations for shapes
         Bq, Hq, Lq, _ = query.shape
         _, _, Lk, _ = key.shape
 
         if attn_mask is not None and attn_mask.shape not in [
             (Lq, Lk),
+            (Bq, Lq, Lk),
             (Bq, 1, Lq, Lk),
             (Bq, Hq, Lq, Lk),
         ]:
             raise ValueError(
                 f"Invalid mask shape {attn_mask.shape}, expected "
-                "(num_queries, num_keys), (batch_size, 1, num_queries, "
-                "num_keys), or (batch_size, num_heads, num_queries, "
-                "num_keys)."
+                "(num_queries, num_keys), (batch_size, num_queries, "
+                "num_keys), (batch_size, 1, num_queries, num_keys), or "
+                "(batch_size, num_heads, num_queries, num_keys)."
             )
 
     @staticmethod
@@ -272,25 +268,6 @@ class AttentionBase(nn.Module, ABC):
                 f"got query head count {Hq}, key head count {Hk}, and "
                 f"value head count {Hv}. Use the same number of heads for "
                 "all three tensors."
-            )
-
-    @staticmethod
-    def _validate_qkv_head_dimensions(
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-    ) -> None:
-        """Validates that query, key, and value head dimensions match."""
-        Dhq = query.shape[-1]
-        Dhk = key.shape[-1]
-        Dhv = value.shape[-1]
-
-        if not (Dhq == Dhk == Dhv):
-            raise ValueError(
-                "Query, key, and value head dimensions must match; "
-                f"got query head dimension {Dhq}, key head dimension {Dhk}, "
-                f"and value head dimension {Dhv}. Use the same head dimension "
-                "for all three tensors."
             )
 
     @staticmethod

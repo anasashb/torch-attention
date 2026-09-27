@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-09-27
+
+### Added
+
+- Added `strict_mode` to `LinearAttention`.
+
+### Changed
+
+- Attention calls now return only the output tensor. Instead of
+  `output, _ = attention(...)`, callable with `output = attention(...)`.
+- Relaxed shape validation to let value head dimension to differ from Q and K
+  head dim in `strict_mode`.
+- ProbSparse and Linear Attention reject nonzero dropout in strict mode and
+  ignore it when strict mode is off.
+
+### Removed
+
+- Removed `output_attention_scores` from the attention constructors. Attention
+  weights are no longer available through the public API.
+
 ## [0.6.0] - 2026-09-19
 
 ### Added

@@ -12,7 +12,7 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     value = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]]).repeat(1, 3, 1, 1)
     attention = LinearAttention(eps=1e-6)
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -22,7 +22,7 @@ def test_linear_attention_matches_pinned_fast_transformers_behavior() -> None:
     expected_output = torch.tensor(
         [[[[1.77024138, 2.77024126], [2.22975802, 3.22975779]]]]
     ).repeat(1, 3, 1, 1)
-    assert attn_weights is None
+    assert isinstance(output, torch.Tensor)
     torch.testing.assert_close(output, expected_output)
 
 
@@ -37,7 +37,7 @@ def test_linear_attention_applies_causal_attention() -> None:
         is_causal=True,
     )
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -45,7 +45,6 @@ def test_linear_attention_applies_causal_attention() -> None:
     )
 
     expected_output = torch.tensor([[[[2.0], [3.0]]]])
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
@@ -71,7 +70,7 @@ def test_linear_attention_matches_quadratic_reference(
     eps = 1e-6
     attention = LinearAttention(eps=eps)
 
-    output, _ = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -94,7 +93,7 @@ def test_linear_attention_accepts_tensor_feature_map() -> None:
     value = torch.tensor([[[[2.0], [4.0]]]])
     attention = LinearAttention(feature_map=torch.ones_like, eps=0.0)
 
-    output, _ = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -112,7 +111,7 @@ def test_linear_attention_applies_key_padding_mask() -> None:
     attn_mask = torch.tensor([[[[False, True]]]])
     attention = LinearAttention(feature_map=torch.ones_like, eps=0.0)
 
-    output, _ = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -122,14 +121,27 @@ def test_linear_attention_applies_key_padding_mask() -> None:
     torch.testing.assert_close(output, torch.tensor([[[[2.0]]]]))
 
 
+@pytest.mark.parametrize(
+    "attn_mask_shape",
+    [
+        pytest.param((2, 2), id="2d-pairwise"),
+        pytest.param((1, 1, 2), id="3d-key-padding"),
+    ],
+)
 @pytest.mark.parametrize("is_causal", [False, True])
-def test_linear_attention_rejects_query_dependent_attention_masks(
+@pytest.mark.parametrize("strict_mode", [False, True])
+def test_linear_attention_rejects_unsupported_attention_masks(
+    attn_mask_shape: tuple[int, ...],
     is_causal: bool,
+    strict_mode: bool,
 ) -> None:
-    """Checks that LinearAttention rejects query-dependent masks."""
+    """Checks that LinearAttention rejects unsupported mask shapes."""
     query = torch.zeros((1, 1, 2, 2))
-    attn_mask = torch.zeros((2, 2), dtype=torch.bool)
-    attention = LinearAttention(is_causal=is_causal)
+    attn_mask = torch.zeros(size=attn_mask_shape, dtype=torch.bool)
+    attention = LinearAttention(
+        is_causal=is_causal,
+        strict_mode=strict_mode,
+    )
 
     with pytest.raises(ValueError) as error:
         attention(
@@ -141,18 +153,7 @@ def test_linear_attention_rejects_query_dependent_attention_masks(
 
     assert str(error.value) == (
         "Linear attention only supports key-padding masks shaped "
-        "[batch_size, 1, 1, num_keys]; got shape (2, 2)."
-    )
-
-
-def test_linear_attention_rejects_attention_scores() -> None:
-    """Checks that LinearAttention rejects attention score output."""
-    with pytest.raises(ValueError) as error:
-        LinearAttention(output_attention_scores=True)
-
-    assert str(error.value) == (
-        "Linear attention does not support returning attention scores. "
-        "Set output_attention_scores=False."
+        f"[batch_size, 1, 1, num_keys]; got shape {attn_mask_shape}."
     )
 
 
@@ -165,6 +166,27 @@ def test_linear_attention_rejects_nonzero_dropout_rate() -> None:
         "Linear attention does not support dropout; got dropout_rate 0.1. "
         "Set dropout_rate=0.0."
     )
+
+
+def test_linear_attention_ignores_dropout_outside_strict_mode() -> None:
+    """Checks that nonzero dropout is ignored when strict mode is off."""
+    query = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
+    attention = LinearAttention(
+        feature_map=torch.ones_like,
+        eps=0.0,
+        dropout_rate=1.0,
+        strict_mode=False,
+    )
+
+    output = attention(
+        query=query,
+        key=query,
+        value=value,
+        attn_mask=None,
+    )
+
+    torch.testing.assert_close(output, torch.full_like(value, 3.0))
 
 
 @pytest.mark.parametrize("is_causal", [False, True])

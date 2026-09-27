@@ -8,13 +8,10 @@ from tests._typing import MakeQKV
 @pytest.mark.parametrize(
     (
         "is_causal",
-        "output_attention_scores",
         "expected_output",
-        "expected_weights",
     ),
     [
         pytest.param(
-            False,
             False,
             torch.tensor(
                 [
@@ -28,11 +25,9 @@ from tests._typing import MakeQKV
                     ]
                 ]
             ),
-            None,
-            id="non_causal_without_attention",
+            id="non_causal",
         ),
         pytest.param(
-            True,
             True,
             torch.tensor(
                 [
@@ -46,27 +41,13 @@ from tests._typing import MakeQKV
                     ]
                 ]
             ),
-            torch.tensor(
-                [
-                    [
-                        [
-                            [0.25, 0.25, 0.25, 0.25],
-                            [0.25, 0.25, 0.25, 0.25],
-                            [0.24825509, 0.24825509, 0.50348985, 0.0],
-                            [0.61451048, 0.07366338, 0.30299589, 0.00883027],
-                        ]
-                    ]
-                ]
-            ),
-            id="causal_with_attention",
+            id="causal",
         ),
     ],
 )
 def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
     is_causal: bool,
-    output_attention_scores: bool,
     expected_output: torch.Tensor,
-    expected_weights: torch.Tensor | None,
 ) -> None:
     """Checks the pinned Informer outputs for sparse query selection."""
     query = torch.tensor([[[[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, -1.0]]]])
@@ -76,11 +57,10 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
         is_causal=is_causal,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=output_attention_scores,
     )
     torch.manual_seed(seed=66)
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -88,14 +68,9 @@ def test_prob_sparse_matches_pinned_informer_sparse_query_behavior(
     )
 
     torch.testing.assert_close(output, expected_output)
-    if expected_weights is None:
-        assert weights is None
-    else:
-        assert weights is not None
-        torch.testing.assert_close(weights, expected_weights)
 
 
-def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
+def test_prob_sparse_supports_different_query_and_key_lengths(
     make_qkv: MakeQKV,
 ) -> None:
     """Checks non-causal attention with different query and key lengths."""
@@ -112,10 +87,9 @@ def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
     attention = ProbSparseAttention(
         is_causal=False,
         factor=1,
-        output_attention_scores=True,
     )
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -128,13 +102,27 @@ def test_prob_sparse_returns_weights_when_query_and_key_lengths_differ(
         num_queries,
         query.shape[-1],
     )
-    assert weights is not None
-    assert weights.shape == (
-        batch_size,
-        num_heads,
-        num_queries,
-        num_keys,
+
+
+@pytest.mark.parametrize("is_causal", [False, True])
+def test_prob_sparse_supports_different_value_head_dimension(
+    is_causal: bool,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that the output uses the value head dimension."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=3,
+        num_queries=4,
+        num_keys=4,
+        head_dim=6,
     )
+    value = value[..., :4]
+    attention = ProbSparseAttention(is_causal=is_causal, factor=1)
+
+    output = attention(query=query, key=key, value=value, attn_mask=None)
+
+    assert output.shape == (2, 3, 4, 4)
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
@@ -153,19 +141,16 @@ def test_prob_sparse_supports_single_position_sequences(
     attention = ProbSparseAttention(
         is_causal=is_causal,
         factor=1,
-        output_attention_scores=True,
     )
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
         attn_mask=None,
     )
 
-    assert weights is not None
     torch.testing.assert_close(output, value)
-    torch.testing.assert_close(weights, torch.ones_like(weights))
 
 
 def test_prob_sparse_uses_zero_custom_scale_factor() -> None:
@@ -177,18 +162,16 @@ def test_prob_sparse_uses_zero_custom_scale_factor() -> None:
         is_causal=False,
         factor=2,
         custom_scale_factor=0.0,
-        output_attention_scores=True,
     )
 
-    output, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
         attn_mask=None,
     )
 
-    assert weights is not None
-    torch.testing.assert_close(weights, torch.full_like(weights, 0.5))
+    assert isinstance(output, torch.Tensor)
     expected_output = value.mean(dim=-2, keepdim=True).expand_as(output)
     torch.testing.assert_close(output, expected_output)
 
@@ -202,7 +185,6 @@ def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
         is_causal=True,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=False,
     )
 
     with pytest.raises(ValueError) as error:
@@ -219,7 +201,8 @@ def test_prob_sparse_rejects_different_causal_query_value_lengths() -> None:
     )
 
 
-def test_prob_sparse_rejects_custom_attention_masks() -> None:
+@pytest.mark.parametrize("strict_mode", [False, True])
+def test_prob_sparse_rejects_custom_attention_masks(strict_mode: bool) -> None:
     """Checks that ProbSparse rejects unsupported custom attention masks."""
     query = torch.zeros(1, 1, 3, 2)
     key = torch.zeros(1, 1, 3, 2)
@@ -229,7 +212,7 @@ def test_prob_sparse_rejects_custom_attention_masks() -> None:
         is_causal=False,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=False,
+        strict_mode=strict_mode,
     )
 
     with pytest.raises(ValueError) as error:
@@ -254,7 +237,6 @@ def test_prob_sparse_rejects_non_positive_factors(factor: int) -> None:
             is_causal=False,
             factor=factor,
             dropout_rate=0.0,
-            output_attention_scores=False,
         )
 
     assert str(error.value) == (
@@ -291,7 +273,6 @@ def test_prob_sparse_rejects_non_four_dimensional_qkv_tensors(
         is_causal=False,
         factor=1,
         dropout_rate=0.0,
-        output_attention_scores=False,
         strict_mode=True,
     )
 
@@ -317,10 +298,29 @@ def test_prob_sparse_rejects_nonzero_dropout_rate() -> None:
             is_causal=False,
             factor=1,
             dropout_rate=0.1,
-            output_attention_scores=False,
         )
 
     assert str(error.value) == (
         "ProbSparse attention does not support dropout; got dropout_rate 0.1. "
         "Set dropout_rate=0.0."
     )
+
+
+def test_prob_sparse_ignores_dropout_outside_strict_mode() -> None:
+    """Checks that nonzero dropout is ignored when strict mode is off."""
+    query = torch.zeros((1, 1, 2, 1))
+    value = torch.tensor([[[[2.0], [4.0]]]])
+    attention = ProbSparseAttention(
+        factor=1,
+        dropout_rate=1.0,
+        strict_mode=False,
+    )
+
+    output = attention(
+        query=query,
+        key=query,
+        value=value,
+        attn_mask=None,
+    )
+
+    torch.testing.assert_close(output, torch.full_like(value, 3.0))

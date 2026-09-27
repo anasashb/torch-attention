@@ -8,13 +8,11 @@ from tests._typing import MakeQKV
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
-@pytest.mark.parametrize("output_attention_scores", [False, True])
 def test_scaled_dot_product(
     is_causal: bool,
-    output_attention_scores: bool,
     make_qkv: MakeQKV,
 ) -> None:
-    """Checks default einsum attention shapes and optional attention scores."""
+    """Checks default einsum attention output shapes."""
     batch_size = 32
     num_heads = 4
     num_queries = 96
@@ -33,37 +31,20 @@ def test_scaled_dot_product(
         is_causal=is_causal,
         dropout_rate=0.0,
         backend="einsum",
-        output_attention_scores=output_attention_scores,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
+    output = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    assert output.shape == (batch_size, num_heads, num_queries, head_dim)
     if is_causal:
-        # let it generate the triangular mask on its own
-        out, weights = attention(
-            query=query,
-            key=key,
-            value=value,
-            attn_mask=None,
-        )
-        assert torch.isfinite(out).all()
-    else:
-        out, weights = attention(
-            query=query,
-            key=key,
-            value=value,
-            attn_mask=None,
-        )
-
-    assert out.shape == (batch_size, num_heads, num_queries, head_dim)
-
-    if output_attention_scores:
-        assert weights.shape == (batch_size, num_heads, num_queries, num_keys)
-
-        summed_weights = weights.sum(dim=-1)
-        assert torch.allclose(
-            summed_weights, torch.ones_like(summed_weights), atol=1e-5
-        )
+        assert torch.isfinite(output).all()
 
 
 @pytest.mark.parametrize("is_causal", [False, True])
@@ -78,12 +59,11 @@ def test_sdpa_backend_matches_torch_scaled_dot_product_attention(
         is_causal=is_causal,
         dropout_rate=0.0,
         backend="sdpa",
-        output_attention_scores=False,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
-    out, weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -98,8 +78,7 @@ def test_sdpa_backend_matches_torch_scaled_dot_product_attention(
         is_causal=is_causal,
     )
 
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+    torch.testing.assert_close(output, expected_out)
 
 
 @pytest.mark.parametrize("backend", ["einsum", "sdpa"])
@@ -109,27 +88,24 @@ def test_scaled_dot_product_disables_dropout_during_evaluation(
 ) -> None:
     """Checks that evaluation mode disables dropout for every backend."""
     query, key, value = make_qkv()
-    output_attention_scores = backend == "einsum"
     attention_with_dropout = ScaledDotProductAttention(
         dropout_rate=0.5,
         backend=backend,
-        output_attention_scores=output_attention_scores,
     )
     attention_without_dropout = ScaledDotProductAttention(
         dropout_rate=0.0,
         backend=backend,
-        output_attention_scores=output_attention_scores,
     )
     attention_with_dropout.eval()
     attention_without_dropout.eval()
 
-    output, weights = attention_with_dropout(
+    output = attention_with_dropout(
         query=query,
         key=key,
         value=value,
         attn_mask=None,
     )
-    expected_output, expected_weights = attention_without_dropout(
+    expected_output = attention_without_dropout(
         query=query,
         key=key,
         value=value,
@@ -137,13 +113,6 @@ def test_scaled_dot_product_disables_dropout_during_evaluation(
     )
 
     torch.testing.assert_close(output, expected_output)
-    if output_attention_scores:
-        assert weights is not None
-        assert expected_weights is not None
-        torch.testing.assert_close(weights, expected_weights)
-    else:
-        assert weights is None
-        assert expected_weights is None
 
 
 @pytest.mark.parametrize("backend", ["einsum", "sdpa"])
@@ -153,14 +122,10 @@ def test_scaled_dot_product_supports_cpu_bfloat16_autocast(
 ) -> None:
     """Checks CPU bfloat16 autocast compatibility for every backend."""
     query, key, value = make_qkv()
-    output_attention_scores = backend == "einsum"
-    attention = ScaledDotProductAttention(
-        backend=backend,
-        output_attention_scores=output_attention_scores,
-    )
+    attention = ScaledDotProductAttention(backend=backend)
 
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
-        output, weights = attention(
+        output = attention(
             query=query,
             key=key,
             value=value,
@@ -169,12 +134,6 @@ def test_scaled_dot_product_supports_cpu_bfloat16_autocast(
 
     assert output.dtype == torch.bfloat16
     assert torch.isfinite(output).all()
-    if output_attention_scores:
-        assert weights is not None
-        assert weights.dtype == torch.bfloat16
-        assert torch.isfinite(weights).all()
-    else:
-        assert weights is None
 
 
 @pytest.mark.parametrize("backend", ["einsum", "sdpa"])
@@ -191,24 +150,20 @@ def test_scaled_dot_product_supports_torch_compile_fullgraph_capture(
     )
     attn_mask = torch.zeros(3, 5, dtype=torch.bool)
     attn_mask[:, -1] = True
-    output_attention_scores = backend == "einsum"
-    attention = ScaledDotProductAttention(
-        backend=backend,
-        output_attention_scores=output_attention_scores,
-    )
+    attention = ScaledDotProductAttention(backend=backend)
     compiled_attention = torch.compile(
         model=attention,
         backend="eager",
         fullgraph=True,
     )
 
-    expected_output, expected_weights = attention(
+    expected_output = attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    output, weights = compiled_attention(
+    output = compiled_attention(
         query=query,
         key=key,
         value=value,
@@ -216,13 +171,6 @@ def test_scaled_dot_product_supports_torch_compile_fullgraph_capture(
     )
 
     torch.testing.assert_close(output, expected_output)
-    if output_attention_scores:
-        assert weights is not None
-        assert expected_weights is not None
-        torch.testing.assert_close(weights, expected_weights)
-    else:
-        assert weights is None
-        assert expected_weights is None
 
 
 @pytest.mark.filterwarnings(
@@ -250,11 +198,7 @@ def test_scaled_dot_product_supports_strict_torch_export(
         "value": value,
         "attn_mask": attn_mask,
     }
-    output_attention_scores = backend == "einsum"
-    attention = ScaledDotProductAttention(
-        backend=backend,
-        output_attention_scores=output_attention_scores,
-    )
+    attention = ScaledDotProductAttention(backend=backend)
     exported_program = torch.export.export(
         mod=attention,
         args=(),
@@ -262,17 +206,10 @@ def test_scaled_dot_product_supports_strict_torch_export(
         strict=True,
     )
 
-    expected_output, expected_weights = attention(**inputs)
-    output, weights = exported_program.module()(**inputs)
+    expected_output = attention(**inputs)
+    output = exported_program.module()(**inputs)
 
     torch.testing.assert_close(output, expected_output)
-    if output_attention_scores:
-        assert weights is not None
-        assert expected_weights is not None
-        torch.testing.assert_close(weights, expected_weights)
-    else:
-        assert weights is None
-        assert expected_weights is None
 
 
 @pytest.mark.parametrize(
@@ -302,7 +239,6 @@ def test_scaled_dot_product_supports_mask_broadcasting(
         is_causal=False,
         dropout_rate=0.0,
         backend="einsum",
-        output_attention_scores=True,
         strict_mode=True,
         custom_scale_factor=None,
     )
@@ -310,28 +246,32 @@ def test_scaled_dot_product_supports_mask_broadcasting(
         is_causal=False,
         dropout_rate=0.0,
         backend="sdpa",
-        output_attention_scores=False,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
-    expected_out, expected_weights = einsum_attention(
+    einsum_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    out, weights = sdpa_attention(
+    sdpa_output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
+    )
+    expected_output = F.scaled_dot_product_attention(
+        query=query,
+        key=key[..., :-1, :],
+        value=value[..., :-1, :],
+        dropout_p=0.0,
+        is_causal=False,
     )
 
-    assert expected_weights is not None
-    assert torch.count_nonzero(expected_weights[..., -1]) == 0
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+    torch.testing.assert_close(einsum_output, expected_output)
+    torch.testing.assert_close(sdpa_output, expected_output)
 
 
 def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
@@ -355,7 +295,6 @@ def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
         is_causal=False,
         dropout_rate=0.0,
         backend="einsum",
-        output_attention_scores=True,
         strict_mode=True,
         custom_scale_factor=None,
     )
@@ -363,40 +302,30 @@ def test_scaled_dot_product_backends_match_with_different_query_and_key_lengths(
         is_causal=False,
         dropout_rate=0.0,
         backend="sdpa",
-        output_attention_scores=False,
         strict_mode=True,
         custom_scale_factor=None,
     )
 
-    expected_out, expected_weights = einsum_attention(
+    expected_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    out, weights = sdpa_attention(
+    output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
 
-    assert expected_out.shape == (
+    assert expected_output.shape == (
         batch_size,
         num_heads,
         num_queries,
         query.shape[-1],
     )
-    assert expected_weights is not None
-    assert expected_weights.shape == (
-        batch_size,
-        num_heads,
-        num_queries,
-        num_keys,
-    )
-    assert torch.count_nonzero(expected_weights[..., -1]) == 0
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+    torch.testing.assert_close(output, expected_output)
 
 
 def test_scaled_dot_product_rejects_unequal_key_and_value_lengths(
@@ -488,9 +417,9 @@ def test_scaled_dot_product_rejects_non_four_dimensional_qkv_tensors(
         ),
         pytest.param(
             (2, 4, 5, 5),
-            "Query, key, and value head dimensions must match; got query head "
-            "dimension 6, key head dimension 5, and value head dimension 6. "
-            "Use the same head dimension for all three tensors.",
+            "Query and key head dimensions must match; got query head "
+            "dimension 6 and key head dimension 5. Use the same head "
+            "dimension for both tensors.",
             id="head-dimension",
         ),
     ],
@@ -522,6 +451,28 @@ def test_scaled_dot_product_rejects_qkv_shape_mismatches(
     assert str(error.value) == expected_message
 
 
+@pytest.mark.parametrize("backend", ("einsum", "sdpa"))
+def test_scaled_dot_product_allows_different_value_head_dimension(
+    backend: AttentionBackend,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that value head width can differ from query and key width."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+        head_dim=6,
+    )
+    value = value[..., :4]
+    attention = ScaledDotProductAttention(backend=backend, strict_mode=True)
+
+    output = attention(query=query, key=key, value=value)
+    expected = F.scaled_dot_product_attention(query=query, key=key, value=value)
+
+    torch.testing.assert_close(actual=output, expected=expected)
+
+
 def test_scaled_dot_product_combines_causal_and_explicit_masks(
     make_qkv: MakeQKV,
 ) -> None:
@@ -539,33 +490,35 @@ def test_scaled_dot_product_combines_causal_and_explicit_masks(
     einsum_attention = ScaledDotProductAttention(
         is_causal=True,
         backend="einsum",
-        output_attention_scores=True,
     )
     sdpa_attention = ScaledDotProductAttention(
         is_causal=True,
         backend="sdpa",
-        output_attention_scores=False,
     )
 
-    expected_out, expected_weights = einsum_attention(
+    einsum_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    out, weights = sdpa_attention(
+    sdpa_output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-
-    assert expected_weights is not None
-    assert (
-        torch.count_nonzero(expected_weights.masked_select(combined_mask)) == 0
+    expected_output = F.scaled_dot_product_attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=~combined_mask,
+        dropout_p=0.0,
+        is_causal=False,
     )
-    assert weights is None
-    torch.testing.assert_close(out, expected_out)
+
+    torch.testing.assert_close(einsum_output, expected_output)
+    torch.testing.assert_close(sdpa_output, expected_output)
 
 
 def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
@@ -585,31 +538,22 @@ def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
     )
     attn_mask = torch.zeros(num_queries, num_keys, dtype=torch.bool)
     attn_mask[fully_masked_query_index, :] = True
-    einsum_attention = ScaledDotProductAttention(
-        backend="einsum",
-        output_attention_scores=True,
-    )
+    einsum_attention = ScaledDotProductAttention(backend="einsum")
     sdpa_attention = ScaledDotProductAttention(backend="sdpa")
 
-    einsum_output, einsum_weights = einsum_attention(
+    einsum_output = einsum_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
-    sdpa_output, sdpa_weights = sdpa_attention(
+    sdpa_output = sdpa_attention(
         query=query,
         key=key,
         value=value,
         attn_mask=attn_mask,
     )
 
-    assert einsum_weights is not None
-    assert sdpa_weights is None
-    torch.testing.assert_close(
-        einsum_weights[..., fully_masked_query_index, :],
-        torch.zeros_like(einsum_weights[..., fully_masked_query_index, :]),
-    )
     torch.testing.assert_close(
         einsum_output[..., fully_masked_query_index, :],
         torch.zeros_like(einsum_output[..., fully_masked_query_index, :]),
@@ -619,15 +563,6 @@ def test_scaled_dot_product_backends_zero_fully_masked_query_rows(
         torch.zeros_like(sdpa_output[..., fully_masked_query_index, :]),
     )
     torch.testing.assert_close(einsum_output, sdpa_output)
-
-
-def test_sdpa_backend_rejects_attention_scores() -> None:
-    """Checks that SDPA rejects unsupported attention score output."""
-    with pytest.raises(ValueError, match="does not support"):
-        ScaledDotProductAttention(
-            backend="sdpa",
-            output_attention_scores=True,
-        )
 
 
 def test_scaled_dot_product_rejects_invalid_backend() -> None:

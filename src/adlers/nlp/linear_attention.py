@@ -23,7 +23,6 @@ from collections.abc import Callable
 
 import torch
 from torch import Tensor
-from torch.nn import Module
 
 from adlers.nlp._causal_product import _causal_linear
 from adlers.shared._attention_base import AttentionBase
@@ -33,7 +32,7 @@ def _elu_feature_map(tensor: Tensor) -> Tensor:
     return torch.nn.functional.elu(tensor) + 1
 
 
-class LinearAttention(Module):
+class LinearAttention(AttentionBase):
     """
     Implements the Linear Attention mechanism from *Transformers are RNNs*.
 
@@ -51,15 +50,16 @@ class LinearAttention(Module):
             Equation 7.
         eps (float): Small value added to the normalization denominator for
             numerical stability.
-        dropout_rate (float): Dropout rate. Only 0.0 is supported.
-        output_attention_scores (bool): Whether to return attention scores.
-            Only False is supported.
+        dropout_rate (float): Dropout rate. Only 0.0 is supported in strict
+            mode; other values are ignored when strict mode is disabled.
+        strict_mode (bool): Whether input shapes are validated on every call.
 
     Attributes:
         is_causal (bool): Whether causal attention is enabled.
         feature_map (Callable[[Tensor], Tensor]): Configured feature-map
             function.
         eps (float): Value added to the normalization denominator.
+        strict_mode (bool): Whether shape validation is enabled.
     """
 
     def __init__(
@@ -68,22 +68,19 @@ class LinearAttention(Module):
         feature_map: Callable[[Tensor], Tensor] | None = None,
         eps: float = 1e-6,
         dropout_rate: float = 0.0,
-        output_attention_scores: bool = False,
+        strict_mode: bool = True,
     ) -> None:
-        if dropout_rate != 0.0:
+        if strict_mode and dropout_rate != 0.0:
             raise ValueError(
                 "Linear attention does not support dropout; "
                 f"got dropout_rate {dropout_rate}. Set dropout_rate=0.0."
             )
 
-        if output_attention_scores:
-            raise ValueError(
-                "Linear attention does not support returning attention scores. "
-                "Set output_attention_scores=False."
-            )
-
-        super().__init__()
-        self.is_causal = is_causal
+        super().__init__(
+            is_causal=is_causal,
+            dropout_rate=0.0,
+            strict_mode=strict_mode,
+        )
         self.feature_map = (
             feature_map if feature_map is not None else _elu_feature_map
         )
@@ -161,7 +158,7 @@ class LinearAttention(Module):
         key: Tensor,
         value: Tensor,
         attn_mask: Tensor | None = None,
-    ) -> tuple[Tensor, None]:
+    ) -> Tensor:
         """
         Computes Linear Attention.
 
@@ -177,8 +174,8 @@ class LinearAttention(Module):
                 that should be masked out.
 
         Returns:
-            tuple[Tensor, None]: The attention output of shape [batch_size,
-                num_heads, num_queries, value_head_dim] and None.
+            Tensor: Attention output of shape [batch_size, num_heads,
+                num_queries, value_head_dim].
 
         Raises:
             ValueError: If the input shapes are incompatible or the attention
@@ -188,29 +185,51 @@ class LinearAttention(Module):
             RuntimeError: If causal attention's compiled operation is
                 unavailable for the input device.
         """
-        AttentionBase._validate_qkv_rank(
+        if attn_mask is not None and not self.strict_mode:
+            self._validate_attn_mask_shape(
+                query=query,
+                key=key,
+                attn_mask=attn_mask,
+            )
+
+        return super().forward(
             query=query,
             key=key,
             value=value,
+            attn_mask=attn_mask,
         )
-        AttentionBase._validate_qkv_batch_sizes(
-            query=query,
-            key=key,
-            value=value,
+
+    @staticmethod
+    def _validate_attn_mask_shape(
+        query: Tensor,
+        key: Tensor,
+        attn_mask: Tensor | None,
+    ) -> None:
+        """Validates Linear Attention's key-padding mask shape."""
+        if attn_mask is None:
+            return
+
+        expected_mask_shape = (
+            query.shape[0],
+            1,
+            1,
+            key.shape[-2],
         )
-        AttentionBase._validate_qkv_head_counts(
-            query=query,
-            key=key,
-            value=value,
-        )
-        AttentionBase._validate_qk_head_dimensions(
-            query=query,
-            key=key,
-        )
-        AttentionBase._validate_kv_sequence_lengths(
-            key=key,
-            value=value,
-        )
+        if attn_mask.shape != expected_mask_shape:
+            raise ValueError(
+                "Linear attention only supports key-padding masks shaped "
+                "[batch_size, 1, 1, num_keys]; "
+                f"got shape {tuple(attn_mask.shape)}."
+            )
+
+    def _attend(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None,
+    ) -> Tensor:
+        """Computes Linear Attention with the configured feature map."""
         if self.is_causal:
             num_queries = query.shape[-2]
             num_keys = key.shape[-2]
@@ -229,20 +248,6 @@ class LinearAttention(Module):
         mapped_key = self.feature_map(key)
 
         if attn_mask is not None:
-            AttentionBase._validate_attn_mask_dtype(attn_mask=attn_mask)
-            expected_mask_shape = (
-                query.shape[0],
-                1,
-                1,
-                key.shape[-2],
-            )
-            if attn_mask.shape != expected_mask_shape:
-                raise ValueError(
-                    "Linear attention only supports key-padding masks shaped "
-                    "[batch_size, 1, 1, num_keys]; "
-                    f"got shape {tuple(attn_mask.shape)}."
-                )
-
             key_padding_mask = attn_mask.squeeze(dim=-2).unsqueeze(dim=-1)
             mapped_key = mapped_key.masked_fill(key_padding_mask, 0)
 
@@ -259,4 +264,4 @@ class LinearAttention(Module):
                 value=value,
             )
 
-        return attn_output.contiguous(), None
+        return attn_output.contiguous()

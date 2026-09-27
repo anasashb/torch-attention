@@ -13,7 +13,7 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     value = torch.tensor([[[[1.0, 2.0], [3.0, 4.0]]]]).repeat(1, 3, 1, 1)
     attention = LinearAttention(is_causal=True, eps=1e-6)
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -22,7 +22,6 @@ def test_causal_linear_attention_is_causal_without_explicit_mask() -> None:
     expected_output = torch.tensor(
         [[[[0.99999976, 1.99999952], [2.22975826, 3.22975802]]]]
     ).repeat(1, 3, 1, 1)
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
     assert output.is_contiguous()
 
@@ -61,7 +60,7 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
     eps = 1e-6
     attention = LinearAttention(is_causal=True, eps=eps)
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -101,7 +100,6 @@ def test_causal_linear_attention_matches_explicit_attention_calculation(
         grad_outputs=output_gradient,
     )
 
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
     for actual_gradient, expected_gradient in zip(
         actual_gradients,
@@ -126,7 +124,7 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
         eps=0.0,
     )
 
-    output, attn_weights = attention(
+    output = attention(
         query=query,
         key=key,
         value=value,
@@ -134,7 +132,6 @@ def test_causal_linear_attention_applies_key_padding_mask() -> None:
     )
 
     expected_output = torch.tensor([[[[2.0], [2.0]]]])
-    assert attn_weights is None
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
@@ -202,7 +199,7 @@ def test_causal_linear_attention_preserves_query_dtype() -> None:
 
     try:
         torch.set_default_dtype(torch.float64)
-        output, _ = attention(
+        output = attention(
             query=query,
             key=query,
             value=query,
