@@ -27,12 +27,12 @@ class XCA(nn.Module):
 
     def __init__(
         self,
-        dim,
-        num_heads=8,
-        qkv_bias=False,
-        qk_scale=None,
-        attn_drop=0.0,
-        proj_drop=0.0,
+        dim: int,
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        qk_scale: float | None = None,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
@@ -43,7 +43,7 @@ class XCA(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
         qkv = qkv.permute(2, 0, 3, 1, 4)
