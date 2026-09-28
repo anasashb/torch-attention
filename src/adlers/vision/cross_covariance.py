@@ -16,6 +16,7 @@ https://github.com/facebookresearch/deit/
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 
 class XCA(nn.Module):
@@ -32,7 +33,7 @@ class XCA(nn.Module):
         qk_scale=None,
         attn_drop=0.0,
         proj_drop=0.0,
-    ):
+    ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
@@ -42,7 +43,7 @@ class XCA(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
         qkv = qkv.permute(2, 0, 3, 1, 4)
@@ -69,5 +70,5 @@ class XCA(nn.Module):
         return x
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self) -> set[str]:
         return {"temperature"}
