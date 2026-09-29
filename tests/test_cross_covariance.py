@@ -17,14 +17,10 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
         num_keys=num_tokens,
         head_dim=head_dim,
     )
-    x = query.transpose(dim0=1, dim1=2).reshape(
-        batch_size, num_tokens, num_heads * head_dim
-    )
     attention = XCA(dim=num_heads * head_dim, num_heads=num_heads)
 
     with torch.no_grad():
         identity = torch.eye(n=num_heads * head_dim)
-        attention.qkv.weight.copy_(identity.repeat(3, 1))
         attention.proj.weight.copy_(identity)
         assert attention.proj.bias is not None
         attention.proj.bias.zero_()
@@ -32,7 +28,7 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
             torch.tensor([0.5, 1.5]).reshape(num_heads, 1, 1)
         )
 
-    output = attention(x=x)
+    output = attention(query=query, key=query, value=query)
 
     expected_output = torch.tensor(
         [
