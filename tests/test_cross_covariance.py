@@ -17,13 +17,9 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
         num_keys=num_tokens,
         head_dim=head_dim,
     )
-    attention = XCA(dim=num_heads * head_dim, num_heads=num_heads)
+    attention = XCA(num_heads=num_heads)
 
     with torch.no_grad():
-        identity = torch.eye(n=num_heads * head_dim)
-        attention.proj.weight.copy_(identity)
-        assert attention.proj.bias is not None
-        attention.proj.bias.zero_()
         attention.temperature.copy_(
             torch.tensor([0.5, 1.5]).reshape(num_heads, 1, 1)
         )
@@ -68,4 +64,7 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
             ]
         ]
     )
+    expected_output = expected_output.reshape(
+        batch_size, num_tokens, num_heads, head_dim
+    ).transpose(dim0=1, dim1=2)
     torch.testing.assert_close(actual=output, expected=expected_output)
