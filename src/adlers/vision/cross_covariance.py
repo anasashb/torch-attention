@@ -27,23 +27,17 @@ class XCA(nn.Module):
 
     def __init__(
         self,
-        dim: int,
         num_heads: int = 8,
         qk_scale: float | None = None,
         attn_drop: float = 0.0,
-        proj_drop: float = 0.0,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, query: Tensor, key: Tensor, value: Tensor) -> Tensor:
-        B, _, N, D = query.shape
-        C = self.num_heads * D
         q, k, v = query, key, value
 
         q = q.transpose(-2, -1)
@@ -57,10 +51,7 @@ class XCA(nn.Module):
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        x = (attn @ v).permute(0, 3, 1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
+        return (attn @ v).transpose(dim0=-2, dim1=-1)
 
     @torch.jit.ignore
     def no_weight_decay(self) -> set[str]:
