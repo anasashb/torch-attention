@@ -1,6 +1,6 @@
 import torch
 
-from adlers.vision.cross_covariance import XCA
+from adlers.vision.cross_covariance import CrossCovarianceAttention
 from tests._typing import MakeQKV
 
 
@@ -17,7 +17,7 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
         num_keys=num_tokens,
         head_dim=head_dim,
     )
-    attention = XCA(num_heads=num_heads)
+    attention = CrossCovarianceAttention(num_heads=num_heads)
 
     with torch.no_grad():
         attention.temperature.copy_(
