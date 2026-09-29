@@ -28,7 +28,6 @@ class XCA(nn.Module):
     def __init__(
         self,
         num_heads: int = 8,
-        qk_scale: float | None = None,
         attn_drop: float = 0.0,
     ) -> None:
         super().__init__()
