@@ -19,7 +19,7 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class XCA(nn.Module):
+class CrossCovarianceAttention(nn.Module):
     """Cross-Covariance Attention (XCA) operation where the channels are updated using a weighted
      sum. The weights are obtained from the (softmax normalized) Cross-covariance
     matrix (Q^T K \\in d_h \\times d_h)
