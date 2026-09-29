@@ -51,7 +51,3 @@ class XCA(nn.Module):
         attn = self.attn_drop(attn)
 
         return (attn @ v).transpose(dim0=-2, dim1=-1)
-
-    @torch.jit.ignore
-    def no_weight_decay(self) -> set[str]:
-        return {"temperature"}
