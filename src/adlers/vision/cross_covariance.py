@@ -29,7 +29,6 @@ class XCA(nn.Module):
         self,
         dim: int,
         num_heads: int = 8,
-        qkv_bias: bool = False,
         qk_scale: float | None = None,
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
@@ -38,20 +37,14 @@ class XCA(nn.Module):
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x: Tensor) -> Tensor:
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
-        qkv = qkv.permute(2, 0, 3, 1, 4)
-        q, k, v = (
-            qkv[0],
-            qkv[1],
-            qkv[2],
-        )  # make torchscript happy (cannot use tensor as tuple)
+    def forward(self, query: Tensor, key: Tensor, value: Tensor) -> Tensor:
+        B, _, N, D = query.shape
+        C = self.num_heads * D
+        q, k, v = query, key, value
 
         q = q.transpose(-2, -1)
         k = k.transpose(-2, -1)
