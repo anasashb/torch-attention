@@ -7,6 +7,12 @@
 #
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
+#
+# Paper:
+# XCiT: Cross-Covariance Image Transformers
+# https://arxiv.org/abs/2106.09681v2
+#
+# Equation and algorithm references below refer to this paper.
 """Cross-covariance attention from the implementation of Cross-Covariance Image Transformer (XCiT).
 
 Based on the timm and DeiT code bases:
