@@ -28,13 +28,13 @@ class CrossCovarianceAttention(nn.Module):
     def __init__(
         self,
         num_heads: int = 8,
-        attn_drop: float = 0.0,
+        dropout_rate: float = 0.0,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
-        self.attn_drop = nn.Dropout(attn_drop)
+        self.dropout = nn.Dropout(dropout_rate)
 
     def forward(self, query: Tensor, key: Tensor, value: Tensor) -> Tensor:
         query = query.transpose(-2, -1)
@@ -46,6 +46,6 @@ class CrossCovarianceAttention(nn.Module):
 
         scores = (query @ key.transpose(-2, -1)) * self.temperature
         attn_weights = scores.softmax(dim=-1)
-        attn_weights = self.attn_drop(attn_weights)
+        attn_weights = self.dropout(attn_weights)
 
         return (attn_weights @ value).transpose(dim0=-2, dim1=-1)
