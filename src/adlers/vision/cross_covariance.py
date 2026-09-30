@@ -44,8 +44,8 @@ class CrossCovarianceAttention(nn.Module):
         query = torch.nn.functional.normalize(query, dim=-1)
         key = torch.nn.functional.normalize(key, dim=-1)
 
-        attn = (query @ key.transpose(-2, -1)) * self.temperature
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
+        scores = (query @ key.transpose(-2, -1)) * self.temperature
+        attn_weights = scores.softmax(dim=-1)
+        attn_weights = self.attn_drop(attn_weights)
 
-        return (attn @ value).transpose(dim0=-2, dim1=-1)
+        return (attn_weights @ value).transpose(dim0=-2, dim1=-1)
