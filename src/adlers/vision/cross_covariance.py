@@ -37,17 +37,15 @@ class CrossCovarianceAttention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
 
     def forward(self, query: Tensor, key: Tensor, value: Tensor) -> Tensor:
-        q, k, v = query, key, value
+        query = query.transpose(-2, -1)
+        key = key.transpose(-2, -1)
+        value = value.transpose(-2, -1)
 
-        q = q.transpose(-2, -1)
-        k = k.transpose(-2, -1)
-        v = v.transpose(-2, -1)
+        query = torch.nn.functional.normalize(query, dim=-1)
+        key = torch.nn.functional.normalize(key, dim=-1)
 
-        q = torch.nn.functional.normalize(q, dim=-1)
-        k = torch.nn.functional.normalize(k, dim=-1)
-
-        attn = (q @ k.transpose(-2, -1)) * self.temperature
+        attn = (query @ key.transpose(-2, -1)) * self.temperature
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        return (attn @ v).transpose(dim0=-2, dim1=-1)
+        return (attn @ value).transpose(dim0=-2, dim1=-1)
