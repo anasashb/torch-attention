@@ -17,14 +17,24 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
         num_keys=num_tokens,
         head_dim=head_dim,
     )
-    attention = CrossCovarianceAttention(num_heads=num_heads)
+    attention = CrossCovarianceAttention(
+        num_heads=num_heads,
+        is_causal=False,
+        dropout_rate=0.0,
+        strict_mode=True,
+    )
 
     with torch.no_grad():
         attention.temperature.copy_(
             torch.tensor([0.5, 1.5]).reshape(num_heads, 1, 1)
         )
 
-    output = attention(query=query, key=query, value=query)
+    output = attention(
+        query=query,
+        key=query,
+        value=query,
+        attn_mask=None,
+    )
 
     expected_output = torch.tensor(
         [
