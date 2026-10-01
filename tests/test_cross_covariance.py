@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from adlers.vision.cross_covariance import CrossCovarianceAttention
@@ -78,3 +79,21 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
         batch_size, num_tokens, num_heads, head_dim
     ).transpose(dim0=1, dim1=2)
     torch.testing.assert_close(actual=output, expected=expected_output)
+
+
+@pytest.mark.parametrize("strict_mode", [False, True])
+def test_cross_covariance_attention_rejects_causal_mode(
+    strict_mode: bool,
+) -> None:
+    """Checks that XCA rejects causal mode regardless of strict mode."""
+    with pytest.raises(ValueError) as error:
+        CrossCovarianceAttention(
+            num_heads=2,
+            is_causal=True,
+            strict_mode=strict_mode,
+        )
+
+    assert str(error.value) == (
+        "Cross-covariance attention does not support causal masking; "
+        "got is_causal=True. Set is_causal=False."
+    )
