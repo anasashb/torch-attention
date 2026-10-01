@@ -24,8 +24,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from adlers.shared._attention_base import AttentionBase
 
-class CrossCovarianceAttention(nn.Module):
+
+class CrossCovarianceAttention(AttentionBase):
     """Cross-Covariance Attention (XCA) operation where the channels are updated using a weighted
      sum. The weights are obtained from the (softmax normalized) Cross-covariance
     matrix (Q^T K \\in d_h \\times d_h)
@@ -34,15 +36,25 @@ class CrossCovarianceAttention(nn.Module):
     def __init__(
         self,
         num_heads: int = 8,
+        is_causal: bool = False,
         dropout_rate: float = 0.0,
+        strict_mode: bool = True,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            is_causal=is_causal,
+            dropout_rate=dropout_rate,
+            strict_mode=strict_mode,
+        )
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
-        self.dropout = nn.Dropout(dropout_rate)
-
-    def forward(self, query: Tensor, key: Tensor, value: Tensor) -> Tensor:
+    def _attend(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None,
+    ) -> Tensor:
         query = query.transpose(-2, -1)
         key = key.transpose(-2, -1)
         value = value.transpose(-2, -1)
