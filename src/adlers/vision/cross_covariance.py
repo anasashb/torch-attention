@@ -89,6 +89,14 @@ class CrossCovarianceAttention(AttentionBase):
             attn_mask=attn_mask,
         )
 
+        input_num_heads = query.shape[1]
+        if input_num_heads != self.num_heads:
+            raise ValueError(
+                "Cross-covariance attention was configured with "
+                f"num_heads={self.num_heads}; got query head count {input_num_heads}. "
+                "Set num_heads to match the input tensors."
+            )
+
         num_queries = query.shape[-2]
         num_keys = key.shape[-2]
         # Lq, Lk need to match becuase cross-covariance matmuls sum over
