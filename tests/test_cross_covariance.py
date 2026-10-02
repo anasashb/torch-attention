@@ -97,3 +97,36 @@ def test_cross_covariance_attention_rejects_causal_mode(
         "Cross-covariance attention does not support causal masking; "
         "got is_causal=True. Set is_causal=False."
     )
+
+
+@pytest.mark.parametrize("strict_mode", [False, True])
+def test_cross_covariance_attention_rejects_custom_attention_masks(
+    strict_mode: bool,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that XCA rejects supplied attention masks."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attn_mask = torch.zeros(size=(3, 3), dtype=torch.bool)
+    attention = CrossCovarianceAttention(
+        num_heads=4,
+        strict_mode=strict_mode,
+    )
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+        )
+
+    assert str(error.value) == (
+        "Cross-covariance attention does not support custom attention masks; "
+        "got shape (3, 3). Pass attn_mask=None."
+    )
