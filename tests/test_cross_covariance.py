@@ -130,3 +130,31 @@ def test_cross_covariance_attention_rejects_custom_attention_masks(
         "Cross-covariance attention does not support custom attention masks; "
         "got shape (3, 3). Pass attn_mask=None."
     )
+
+
+def test_cross_covariance_attention_rejects_mismatched_query_and_key_lengths(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that XCA requires matching query and key lengths."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=5,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention(num_heads=4)
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Cross-covariance attention requires matching query and key "
+        "sequence lengths; got query length 3 and key length 5. "
+        "Use the same sequence length for both tensors."
+    )
