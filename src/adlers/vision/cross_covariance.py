@@ -74,6 +74,32 @@ class CrossCovarianceAttention(AttentionBase):
             attn_mask=None,
         )
 
+    def _validate_shapes(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None,
+    ) -> None:
+        """Validates shared shapes and XCA's query/key sequence lengths."""
+        super()._validate_shapes(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=attn_mask,
+        )
+
+        num_queries = query.shape[-2]
+        num_keys = key.shape[-2]
+        # Lq, Lk need to match becuase cross-covariance matmuls sum over
+        # token positions
+        if num_queries != num_keys:
+            raise ValueError(
+                "Cross-covariance attention requires matching query and key "
+                f"sequence lengths; got query length {num_queries} and key "
+                f"length {num_keys}. Use the same sequence length for both tensors."
+            )
+
     def _attend(
         self,
         query: Tensor,
