@@ -54,6 +54,26 @@ class CrossCovarianceAttention(AttentionBase):
         self.num_heads = num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
 
+    def forward(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None = None,
+    ) -> Tensor:
+        if attn_mask is not None:
+            raise ValueError(
+                "Cross-covariance attention does not support custom attention masks; "
+                f"got shape {tuple(attn_mask.shape)}. Pass attn_mask=None."
+            )
+
+        return super().forward(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
     def _attend(
         self,
         query: Tensor,
