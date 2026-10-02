@@ -81,7 +81,7 @@ class CrossCovarianceAttention(AttentionBase):
         value: Tensor,
         attn_mask: Tensor | None,
     ) -> None:
-        """Validates shared shapes and XCA's query/key sequence lengths."""
+        """Validates tensor shapes for cross-covariance attention."""
         super()._validate_shapes(
             query=query,
             key=key,
@@ -98,6 +98,18 @@ class CrossCovarianceAttention(AttentionBase):
                 "Cross-covariance attention requires matching query and key "
                 f"sequence lengths; got query length {num_queries} and key "
                 f"length {num_keys}. Use the same sequence length for both tensors."
+            )
+
+        key_head_dim = key.shape[-1]
+        value_head_dim = value.shape[-1]
+        # Dhk, Dhv need to match because attn_weights @ value sums over
+        # channels
+        if key_head_dim != value_head_dim:
+            raise ValueError(
+                "Cross-covariance attention requires matching key and value head "
+                f"dimensions; got key head dimension {key_head_dim} and value head "
+                f"dimension {value_head_dim}. "
+                "Use the same head dimension for both tensors."
             )
 
     def _attend(
