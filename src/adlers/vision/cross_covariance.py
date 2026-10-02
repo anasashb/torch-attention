@@ -40,6 +40,12 @@ class CrossCovarianceAttention(AttentionBase):
         dropout_rate: float = 0.0,
         strict_mode: bool = True,
     ) -> None:
+        if is_causal:
+            raise ValueError(
+                "Cross-covariance attention does not support causal masking; "
+                "got is_causal=True. Set is_causal=False."
+            )
+
         super().__init__(
             is_causal=is_causal,
             dropout_rate=dropout_rate,
