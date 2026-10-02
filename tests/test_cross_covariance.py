@@ -187,3 +187,37 @@ def test_cross_covariance_attention_rejects_mismatched_key_and_value_head_dimens
         "dimensions; got key head dimension 6 and value head dimension 4. "
         "Use the same head dimension for both tensors."
     )
+
+
+@pytest.mark.parametrize(
+    ("num_heads", "input_num_heads"),
+    [(4, 1), (1, 4)],
+)
+def test_cross_covariance_attention_rejects_mismatched_configured_head_count(
+    num_heads: int,
+    input_num_heads: int,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that input head counts match the configured num_heads."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=input_num_heads,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention(num_heads=num_heads)
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        f"Cross-covariance attention was configured with num_heads={num_heads}; "
+        f"got query head count {input_num_heads}. "
+        "Set num_heads to match the input tensors."
+    )
