@@ -158,3 +158,32 @@ def test_cross_covariance_attention_rejects_mismatched_query_and_key_lengths(
         "sequence lengths; got query length 3 and key length 5. "
         "Use the same sequence length for both tensors."
     )
+
+
+def test_cross_covariance_attention_rejects_mismatched_key_and_value_head_dimensions(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that XCA requires matching key and value head dimensions."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    value = value[..., :4]
+    attention = CrossCovarianceAttention(num_heads=4)
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Cross-covariance attention requires matching key and value head "
+        "dimensions; got key head dimension 6 and value head dimension 4. "
+        "Use the same head dimension for both tensors."
+    )
