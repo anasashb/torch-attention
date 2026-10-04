@@ -247,3 +247,32 @@ def test_cross_covariance_attention_infers_head_count_from_input(
         actual=attention.temperature,
         expected=torch.ones(size=(4, 1, 1)),
     )
+
+
+def test_cross_covariance_attention_rejects_changed_inferred_head_count(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that the inferred head count stays fixed after initialization."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention()
+    attention(query=query, key=key, value=value, attn_mask=None)
+
+    with pytest.raises(ValueError) as error:
+        attention(
+            query=query[:, :1],
+            key=key[:, :1],
+            value=value[:, :1],
+            attn_mask=None,
+        )
+
+    assert str(error.value) == (
+        "Cross-covariance attention was configured with num_heads=4; "
+        "got query head count 1. "
+        "Set num_heads to match the input tensors."
+    )
