@@ -358,3 +358,41 @@ def test_cross_covariance_attention_loads_temperature_before_lazy_initialization
         expected=original.temperature,
     )
     torch.testing.assert_close(actual=output, expected=expected_output)
+
+
+@pytest.mark.parametrize(
+    "num_heads",
+    [
+        pytest.param(None, id="lazy"),
+        pytest.param(4, id="explicit"),
+    ],
+)
+def test_cross_covariance_attention_updates_temperature_during_training(
+    num_heads: int | None,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that per-head temperatures receive gradients and updates."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention(num_heads=num_heads)
+    output = attention(query=query, key=key, value=value, attn_mask=None)
+
+    initial_temperature = attention.temperature.detach().clone()
+    optimizer = torch.optim.SGD(params=attention.parameters(), lr=0.1)
+
+    output.square().mean().backward()
+
+    assert attention.temperature.grad is not None
+    assert torch.isfinite(input=attention.temperature.grad).all()
+
+    optimizer.step()
+
+    assert not torch.equal(
+        input=attention.temperature,
+        other=initial_temperature,
+    )
