@@ -81,6 +81,47 @@ def test_xca_matches_pinned_xcit_behavior(make_qkv: MakeQKV) -> None:
     torch.testing.assert_close(actual=output, expected=expected_output)
 
 
+@pytest.mark.parametrize(
+    "device",
+    [
+        pytest.param(torch.device("cpu"), id="cpu"),
+        pytest.param(
+            torch.device("cuda"),
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(),
+                reason="CUDA is not available",
+            ),
+            id="cuda",
+        ),
+    ],
+)
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_cross_covariance_attention_preserves_device_and_dtype_during_lazy_initialization(
+    device: torch.device,
+    dtype: torch.dtype,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that lazy temperature keeps the module's device and dtype."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    query = query.to(device=device, dtype=dtype)
+    key = key.to(device=device, dtype=dtype)
+    value = value.to(device=device, dtype=dtype)
+    attention = CrossCovarianceAttention().to(device=device, dtype=dtype)
+
+    attention(query=query, key=key, value=value, attn_mask=None)
+
+    torch.testing.assert_close(
+        actual=attention.temperature,
+        expected=torch.ones(size=(4, 1, 1), device=device, dtype=dtype),
+    )
+
+
 @pytest.mark.parametrize("strict_mode", [False, True])
 def test_cross_covariance_attention_rejects_causal_mode(
     strict_mode: bool,
