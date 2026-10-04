@@ -221,3 +221,29 @@ def test_cross_covariance_attention_rejects_mismatched_configured_head_count(
         f"got query head count {input_num_heads}. "
         "Set num_heads to match the input tensors."
     )
+
+
+def test_cross_covariance_attention_infers_head_count_from_input(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that XCA initializes one temperature per input head."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention()
+
+    attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    torch.testing.assert_close(
+        actual=attention.temperature,
+        expected=torch.ones(size=(4, 1, 1)),
+    )
