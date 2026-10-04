@@ -23,11 +23,12 @@ https://github.com/facebookresearch/deit/
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.nn.modules.lazy import LazyModuleMixin
 
 from adlers.shared._attention_base import AttentionBase
 
 
-class CrossCovarianceAttention(AttentionBase):
+class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
     """Cross-Covariance Attention (XCA) operation where the channels are updated using a weighted
      sum. The weights are obtained from the (softmax normalized) Cross-covariance
     matrix (Q^T K \\in d_h \\times d_h)
@@ -35,7 +36,7 @@ class CrossCovarianceAttention(AttentionBase):
 
     def __init__(
         self,
-        num_heads: int = 8,
+        num_heads: int | None = None,
         is_causal: bool = False,
         dropout_rate: float = 0.0,
         strict_mode: bool = True,
@@ -52,7 +53,34 @@ class CrossCovarianceAttention(AttentionBase):
             strict_mode=strict_mode,
         )
         self.num_heads = num_heads
-        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
+        self.temperature: nn.Parameter = (
+            nn.UninitializedParameter()
+            if num_heads is None
+            else nn.Parameter(torch.ones(num_heads, 1, 1))
+        )
+
+    def initialize_parameters(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Tensor | None = None,
+    ) -> None:
+        """Initializes per-head temperatures from the input head count."""
+        if isinstance(self.temperature, nn.UninitializedParameter):
+            if self.strict_mode:
+                self._validate_shapes(
+                    query=query,
+                    key=key,
+                    value=value,
+                    attn_mask=attn_mask,
+                )
+
+            with torch.no_grad():
+                self.temperature.materialize(shape=(query.shape[1], 1, 1))
+                nn.init.ones_(tensor=self.temperature)
+
+        self.num_heads = self.temperature.shape[0]
 
     def forward(
         self,
@@ -90,7 +118,7 @@ class CrossCovarianceAttention(AttentionBase):
         )
 
         input_num_heads = query.shape[1]
-        if input_num_heads != self.num_heads:
+        if self.num_heads is not None and input_num_heads != self.num_heads:
             raise ValueError(
                 "Cross-covariance attention was configured with "
                 f"num_heads={self.num_heads}; got query head count {input_num_heads}. "
