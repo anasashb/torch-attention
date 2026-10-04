@@ -276,3 +276,44 @@ def test_cross_covariance_attention_rejects_changed_inferred_head_count(
         "got query head count 1. "
         "Set num_heads to match the input tensors."
     )
+
+
+def test_cross_covariance_attention_loads_temperature_before_lazy_initialization(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that loading a checkpoint preserves per-head temperatures."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    original = CrossCovarianceAttention(num_heads=4)
+
+    with torch.no_grad():
+        original.temperature.copy_(
+            torch.tensor([0.5, 1.0, 1.5, 2.0]).reshape(4, 1, 1)
+        )
+
+    expected_output = original(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    restored = CrossCovarianceAttention()
+    restored.load_state_dict(state_dict=original.state_dict())
+    output = restored(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    torch.testing.assert_close(
+        actual=restored.temperature,
+        expected=original.temperature,
+    )
+    torch.testing.assert_close(actual=output, expected=expected_output)
