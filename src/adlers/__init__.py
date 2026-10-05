@@ -3,8 +3,10 @@ from importlib.metadata import PackageNotFoundError, version
 from adlers.nlp import LinearAttention
 from adlers.shared import ScaledDotProductAttention
 from adlers.time_series import ProbSparseAttention
+from adlers.vision import CrossCovarianceAttention
 
 __all__ = [
+    "CrossCovarianceAttention",
     "LinearAttention",
     "ProbSparseAttention",
     "ScaledDotProductAttention",
