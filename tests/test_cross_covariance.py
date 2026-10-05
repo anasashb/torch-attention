@@ -396,3 +396,36 @@ def test_cross_covariance_attention_updates_temperature_during_training(
         input=attention.temperature,
         other=initial_temperature,
     )
+
+
+@pytest.mark.parametrize("training", [True, False])
+def test_cross_covariance_attention_applies_dropout_only_during_training(
+    training: bool,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that configured dropout applies in training but not evaluation."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention(dropout_rate=1.0)
+    attention.train(mode=training)
+
+    output = attention(query=query, key=key, value=value, attn_mask=None)
+
+    if training:
+        expected_output = torch.zeros_like(input=output)
+    else:
+        attention_without_dropout = CrossCovarianceAttention(dropout_rate=0.0)
+        attention_without_dropout.eval()
+        expected_output = attention_without_dropout(
+            query=query,
+            key=key,
+            value=value,
+            attn_mask=None,
+        )
+
+    torch.testing.assert_close(actual=output, expected=expected_output)
