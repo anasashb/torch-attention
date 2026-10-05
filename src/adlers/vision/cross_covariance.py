@@ -40,6 +40,7 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         is_causal: bool = False,
         dropout_rate: float = 0.0,
         strict_mode: bool = True,
+        learnable_temperature: bool = True,
     ) -> None:
         if is_causal:
             raise ValueError(
@@ -53,11 +54,26 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
             strict_mode=strict_mode,
         )
         self.num_heads = num_heads
-        self.temperature: nn.Parameter | nn.UninitializedParameter = (
-            nn.UninitializedParameter()
-            if num_heads is None
-            else nn.Parameter(torch.ones(num_heads, 1, 1))
-        )
+
+        self.temperature: Tensor
+        # original XCA behavior
+        if learnable_temperature:
+            self.temperature = (
+                nn.UninitializedParameter()
+                if num_heads is None
+                else nn.Parameter(torch.ones(num_heads, 1, 1))
+            )
+        # fixed temperature constant (1) here as an extra (convenience)
+        # extension for ADLERS
+        else:
+            self.register_buffer(
+                name="temperature",
+                tensor=(
+                    nn.UninitializedBuffer()
+                    if num_heads is None
+                    else torch.ones(num_heads, 1, 1)
+                ),
+            )
 
     def initialize_parameters(
         self,
@@ -67,7 +83,10 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         attn_mask: Tensor | None = None,
     ) -> None:
         """Initializes per-head temperatures from the input head count."""
-        if isinstance(self.temperature, nn.UninitializedParameter):
+        if isinstance(
+            self.temperature,
+            (nn.UninitializedParameter, nn.UninitializedBuffer),
+        ):
             if self.strict_mode:
                 self._validate_shapes(
                     query=query,
