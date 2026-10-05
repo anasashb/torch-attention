@@ -53,6 +53,10 @@ def test_attention_latency_benchmark(
     assert "ADLERS einsum" in output
     assert "ADLERS ProbSparse" in output
     assert "ADLERS Linear" in output
+    if causal_args:
+        assert "ADLERS XCA" not in output
+    else:
+        assert "ADLERS XCA" in output
     assert "inference" in output
     assert "training" in output
     assert "1x1x2x2" in output
