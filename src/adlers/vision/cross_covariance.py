@@ -53,7 +53,7 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
             strict_mode=strict_mode,
         )
         self.num_heads = num_heads
-        self.temperature: nn.Parameter = (
+        self.temperature: nn.Parameter | nn.UninitializedParameter = (
             nn.UninitializedParameter()
             if num_heads is None
             else nn.Parameter(torch.ones(num_heads, 1, 1))
