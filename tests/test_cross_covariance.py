@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from adlers.vision.cross_covariance import CrossCovarianceAttention
+from adlers.vision import CrossCovarianceAttention
 from tests._typing import MakeQKV
 
 
