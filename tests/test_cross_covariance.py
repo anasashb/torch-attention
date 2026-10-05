@@ -469,3 +469,40 @@ def test_cross_covariance_attention_matches_explicit_channel_attention_calculati
     expected_output = torch.einsum("bhde,bhle->bhld", attn_weights, value)
 
     torch.testing.assert_close(actual=output, expected=expected_output)
+
+
+@pytest.mark.parametrize(
+    "num_heads",
+    [
+        pytest.param(None, id="lazy"),
+        pytest.param(4, id="explicit"),
+    ],
+)
+def test_cross_covariance_attention_registers_fixed_temperature_as_buffer(
+    num_heads: int | None,
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks that fixed temperatures are buffers initialized to one."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    attention = CrossCovarianceAttention(
+        num_heads=num_heads,
+        learnable_temperature=False,
+    )
+
+    attention(query=query, key=key, value=value, attn_mask=None)
+
+    assert "temperature" not in dict(attention.named_parameters())
+    assert (
+        dict(attention.named_buffers())["temperature"] is attention.temperature
+    )
+    assert not attention.temperature.requires_grad
+    torch.testing.assert_close(
+        actual=attention.temperature,
+        expected=torch.ones(size=(4, 1, 1)),
+    )
