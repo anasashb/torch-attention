@@ -429,3 +429,43 @@ def test_cross_covariance_attention_applies_dropout_only_during_training(
         )
 
     torch.testing.assert_close(actual=output, expected=expected_output)
+
+
+def test_cross_covariance_attention_matches_explicit_channel_attention_calculation(
+    make_qkv: MakeQKV,
+) -> None:
+    """Checks XCA against an explicit channel-attention calculation."""
+    query, key, value = make_qkv(
+        batch_size=2,
+        num_heads=4,
+        num_queries=3,
+        num_keys=3,
+        head_dim=6,
+    )
+    temperature = torch.tensor([0.5, 1.0, 1.5, 2.0]).reshape(4, 1, 1)
+    attention = CrossCovarianceAttention(num_heads=4)
+
+    with torch.no_grad():
+        attention.temperature.copy_(temperature)
+
+    output = attention(
+        query=query,
+        key=key,
+        value=value,
+        attn_mask=None,
+    )
+
+    normalized_query = torch.nn.functional.normalize(input=query, dim=-2)
+    normalized_key = torch.nn.functional.normalize(input=key, dim=-2)
+    scores = (
+        torch.einsum(
+            "bhld,bhle->bhde",
+            normalized_query,
+            normalized_key,
+        )
+        * temperature
+    )
+    attn_weights = scores.softmax(dim=-1)
+    expected_output = torch.einsum("bhde,bhle->bhld", attn_weights, value)
+
+    torch.testing.assert_close(actual=output, expected=expected_output)
