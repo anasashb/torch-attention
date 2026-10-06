@@ -9,7 +9,7 @@ from collections.abc import Callable
 from functools import partial
 from itertools import chain, product
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 import torch.nn.functional as F
@@ -39,6 +39,16 @@ _MECHANISM_LABELS = {
 _SCHEMA_VERSION = 1
 _SEED = 66
 _JsonObject = dict[str, Any]
+
+
+class _AttentionConstructor(Protocol):
+    def __call__(
+        self,
+        *,
+        is_causal: bool,
+        dropout_rate: float,
+        strict_mode: bool,
+    ) -> AttentionBase: ...
 
 
 def _positive_int(value: str) -> int:
@@ -145,7 +155,7 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
-    constructors: dict[str, type[AttentionBase] | partial[AttentionBase]] = {
+    constructors: dict[str, _AttentionConstructor] = {
         "adlers-sdpa": partial(ScaledDotProductAttention, backend="sdpa"),
         "adlers-einsum": partial(ScaledDotProductAttention, backend="einsum"),
         "adlers-probsparse": ProbSparseAttention,
