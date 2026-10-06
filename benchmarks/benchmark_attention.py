@@ -17,6 +17,7 @@ import torch.utils.benchmark as benchmark
 from torch import Tensor
 
 from adlers import (
+    CrossCovarianceAttention,
     LinearAttention,
     ProbSparseAttention,
     ScaledDotProductAttention,
@@ -35,6 +36,7 @@ _MECHANISM_LABELS = {
     "adlers-einsum": "ADLERS einsum",
     "adlers-probsparse": "ADLERS ProbSparse",
     "adlers-linear": "ADLERS Linear",
+    "adlers-xca": "ADLERS XCA (fixed)",
 }
 _SCHEMA_VERSION = 1
 _SEED = 66
@@ -160,6 +162,11 @@ def _make_attention_call(
         "adlers-einsum": partial(ScaledDotProductAttention, backend="einsum"),
         "adlers-probsparse": ProbSparseAttention,
         "adlers-linear": LinearAttention,
+        "adlers-xca": partial(
+            CrossCovarianceAttention,
+            num_heads=query.shape[1],
+            learnable_temperature=False,
+        ),
     }
     attention = constructors[mechanism](
         is_causal=is_causal,
@@ -167,7 +174,7 @@ def _make_attention_call(
         strict_mode=True,
     )
 
-    attention = attention.to(device=query.device)
+    attention = attention.to(device=query.device, dtype=query.dtype)
     attention.train(mode=training)
 
     def call_adlers() -> Tensor:
@@ -439,7 +446,11 @@ def main(argv: list[str] | None = None) -> None:
     mechanisms = (
         (selected_mechanism,)
         if selected_mechanism
-        else tuple(_MECHANISM_LABELS)
+        else tuple(
+            mechanism
+            for mechanism in _MECHANISM_LABELS
+            if not (is_causal and mechanism == "adlers-xca")
+        )
     )
 
     cases = tuple(product(sequence_lengths, modes, mechanisms))
