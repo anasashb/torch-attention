@@ -6,6 +6,7 @@ import platform
 import subprocess  # noqa: S404
 import sys
 from collections.abc import Callable
+from functools import partial
 from itertools import chain, product
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from adlers import (
     ProbSparseAttention,
     ScaledDotProductAttention,
 )
+from adlers.shared._attention_base import AttentionBase
 
 _DEFAULT_SEQUENCE_LENGTHS = (128, 512, 2048)
 _DTYPES = {
@@ -143,26 +145,17 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
-    attention: ProbSparseAttention | LinearAttention | ScaledDotProductAttention
-
-    if mechanism == "adlers-probsparse":
-        attention = ProbSparseAttention(
-            is_causal=is_causal,
-            dropout_rate=0.0,
-            strict_mode=True,
-        )
-    elif mechanism == "adlers-linear":
-        attention = LinearAttention(
-            is_causal=is_causal,
-            dropout_rate=0.0,
-        )
-    else:
-        attention = ScaledDotProductAttention(
-            is_causal=is_causal,
-            dropout_rate=0.0,
-            strict_mode=True,
-            backend="sdpa" if mechanism == "adlers-sdpa" else "einsum",
-        )
+    constructors: dict[str, type[AttentionBase] | partial[AttentionBase]] = {
+        "adlers-sdpa": partial(ScaledDotProductAttention, backend="sdpa"),
+        "adlers-einsum": partial(ScaledDotProductAttention, backend="einsum"),
+        "adlers-probsparse": ProbSparseAttention,
+        "adlers-linear": LinearAttention,
+    }
+    attention = constructors[mechanism](
+        is_causal=is_causal,
+        dropout_rate=0.0,
+        strict_mode=True,
+    )
 
     attention = attention.to(device=query.device)
     attention.train(mode=training)
