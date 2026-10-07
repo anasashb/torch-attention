@@ -29,9 +29,31 @@ from adlers.shared._attention_base import AttentionBase
 
 
 class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
-    """Cross-Covariance Attention (XCA) operation where the channels are updated using a weighted
-     sum. The weights are obtained from the (softmax normalized) Cross-covariance
-    matrix (Q^T K \\in d_h \\times d_h)
+    """
+    Implements XCiT's Cross-Covariance Attention (XCA) mechanism.
+
+    L2-normalized queries and keys are used to compute attention weights
+    between channels, as described in Section 3.2 of the XCiT paper.
+    These weights mix value channels within each token.
+
+    Args:
+        num_heads (int | None): Number of attention heads. When None,
+            inferred on the first forward call and fixed for later calls.
+        is_causal (bool): Only False is supported.
+        dropout_rate (float): Dropout rate applied to attention weights
+            during training.
+        strict_mode (bool): Whether input shapes are validated on every call.
+        learnable_temperature (bool): Whether per-head temperatures are
+            learned. Defaults to True, matching the original implementation.
+            When False, uses a fixed temperature of 1.0.
+
+    Attributes:
+        num_heads (int | None): Configured or inferred head count.
+        temperature (Tensor): Per-head score multipliers of shape
+            [num_heads, 1, 1], initialized to 1.0. Stored as a parameter
+            when learned, or a buffer otherwise.
+        is_causal (bool): Whether causal masking is enabled. Always False.
+        strict_mode (bool): Whether shape validation is enabled.
     """
 
     def __init__(
