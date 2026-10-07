@@ -182,6 +182,12 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         query = torch.nn.functional.normalize(query, dim=-1)
         key = torch.nn.functional.normalize(key, dim=-1)
 
+        # Compute per-head channel scores, shaped [B, H, D, D] (Section 3.2).
+        # NOTE: The XCiT authors' original implementation uses in code (see
+        # below) uses query @ key.T, whereas Algorithm 1 in the appendix of the
+        # XCiT paper uses key @ query.T. These are not generally equivalent
+        # after softmax for the same inputs, but here I preserve the original
+        # code as was.
         scores = (query @ key.transpose(-2, -1)) * self.temperature
         attn_weights = scores.softmax(dim=-1)
         attn_weights = self.dropout(attn_weights)
