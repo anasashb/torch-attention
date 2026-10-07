@@ -178,6 +178,7 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         key = key.transpose(-2, -1)
         value = value.transpose(-2, -1)
 
+        # L2-normalize each query and key channel across tokens (Section 3.2).
         query = torch.nn.functional.normalize(query, dim=-1)
         key = torch.nn.functional.normalize(key, dim=-1)
 
