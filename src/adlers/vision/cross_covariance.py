@@ -222,6 +222,7 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         value: Tensor,
         attn_mask: Tensor | None,
     ) -> Tensor:
+        """Computes cross-covariance attention for the supplied tensors."""
         query = query.transpose(-2, -1)
         key = key.transpose(-2, -1)
         value = value.transpose(-2, -1)
