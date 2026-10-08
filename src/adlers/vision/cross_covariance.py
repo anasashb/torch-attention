@@ -130,6 +130,27 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         value: Tensor,
         attn_mask: Tensor | None = None,
     ) -> Tensor:
+        """
+        Computes cross-covariance attention.
+
+        Args:
+            query (Tensor): Query tensor of shape [batch_size, num_heads,
+                num_queries, head_dim].
+            key (Tensor): Key tensor of shape [batch_size, num_heads,
+                num_keys, head_dim].
+            value (Tensor): Value tensor of shape [batch_size, num_heads,
+                num_keys, value_head_dim].
+            attn_mask (Tensor | None): Must be None. Custom attention masks
+                are not supported.
+
+        Returns:
+            Tensor: Attention output of shape [batch_size, num_heads,
+                num_queries, value_head_dim].
+
+        Raises:
+            ValueError: If a custom attention mask is supplied or an input shape
+                is invalid.
+        """
         if attn_mask is not None:
             raise ValueError(
                 "Cross-covariance attention does not support custom attention masks; "
