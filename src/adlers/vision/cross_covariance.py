@@ -104,7 +104,12 @@ class CrossCovarianceAttention(LazyModuleMixin, AttentionBase):
         value: Tensor,
         attn_mask: Tensor | None = None,
     ) -> None:
-        """Initializes per-head temperatures from the input head count."""
+        """
+        Initializes per-head temperatures from the input head count.
+
+        Called automatically before the first forward call. Uninitialized
+        temperatures are set to 1.0; existing temperatures are left unchanged.
+        """
         if isinstance(
             self.temperature,
             (nn.UninitializedParameter, nn.UninitializedBuffer),
