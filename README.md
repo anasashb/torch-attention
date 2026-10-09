@@ -13,6 +13,7 @@ Unified attention mechanisms for PyTorch across NLP, vision, and time series.
 import torch
 
 from adlers import (
+    CrossCovarianceAttention,
     LinearAttention,
     ProbSparseAttention,
     ScaledDotProductAttention,
@@ -63,6 +64,23 @@ Only compact boolean key-padding masks shaped
 `[batch_size, 1, 1, num_keys]` are supported. Pairwise attention masks,
 nonzero dropout, and attention-score output are not supported. The causal
 implementation currently requires `torch.float32`.
+
+### Cross-covariance attention
+
+`CrossCovarianceAttention` implements
+[XCiT's Cross-Covariance Attention](https://arxiv.org/abs/2106.09681v2).
+
+```python
+attention = CrossCovarianceAttention()
+output = attention(query=query, key=key, value=value)
+```
+
+The head count is inferred from the first input. Pass a defined `num_heads`
+value to configure it explicitly. Per-head temperatures are learned by default;
+set `learnable_temperature=False` to use fixed temperatures of `1.0`.
+
+Query, key, and value sequence lengths and head dimensions must match.
+Causal masking and custom attention masks are not supported.
 
 ## Supported Tensor and mask shapes
 
