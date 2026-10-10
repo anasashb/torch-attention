@@ -12,6 +12,18 @@ src/adlers/time_series/prob_sparse.py
 Informer2020 is licensed under the Apache License, Version 2.0.
 See LICENSES/Apache-2.0.txt.
 
+This project also includes software adapted from XCiT:
+https://github.com/facebookresearch/xcit
+
+Source revision:
+82f5291f412604970c39a912586e008ec009cdca
+
+The adapted code is located in:
+src/adlers/vision/cross_covariance.py
+
+XCiT is licensed under the Apache License, Version 2.0.
+See LICENSES/Apache-2.0.txt.
+
 This project also includes software adapted from fast-transformers:
 https://github.com/idiap/fast-transformers
 

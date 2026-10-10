@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-10-09
+
+### Added
+
+- Added XCiT's Cross-Covariance Attention mechanism.
+- Added automatic head-count inference and a fixed-temperature option.
+- Made `CrossCovarianceAttention` available from `adlers` and `adlers.vision`.
+- Added fixed-temperature Cross-Covariance Attention to the benchmark.
+- Included Apache 2.0 attribution for the XCiT code adapted in this release.
+
 ## [0.7.0] - 2026-09-27
 
 ### Added

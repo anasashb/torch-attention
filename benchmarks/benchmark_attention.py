@@ -6,9 +6,10 @@ import platform
 import subprocess  # noqa: S404
 import sys
 from collections.abc import Callable
+from functools import partial
 from itertools import chain, product
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 import torch.nn.functional as F
@@ -16,10 +17,12 @@ import torch.utils.benchmark as benchmark
 from torch import Tensor
 
 from adlers import (
+    CrossCovarianceAttention,
     LinearAttention,
     ProbSparseAttention,
     ScaledDotProductAttention,
 )
+from adlers.shared._attention_base import AttentionBase
 
 _DEFAULT_SEQUENCE_LENGTHS = (128, 512, 2048)
 _DTYPES = {
@@ -33,10 +36,21 @@ _MECHANISM_LABELS = {
     "adlers-einsum": "ADLERS einsum",
     "adlers-probsparse": "ADLERS ProbSparse",
     "adlers-linear": "ADLERS Linear",
+    "adlers-xca": "ADLERS XCA (fixed)",
 }
 _SCHEMA_VERSION = 1
 _SEED = 66
 _JsonObject = dict[str, Any]
+
+
+class _AttentionConstructor(Protocol):
+    def __call__(
+        self,
+        *,
+        is_causal: bool,
+        dropout_rate: float,
+        strict_mode: bool,
+    ) -> AttentionBase: ...
 
 
 def _positive_int(value: str) -> int:
@@ -143,28 +157,24 @@ def _make_attention_call(
 
         return call_sdpa_auto
 
-    attention: ProbSparseAttention | LinearAttention | ScaledDotProductAttention
+    constructors: dict[str, _AttentionConstructor] = {
+        "adlers-sdpa": partial(ScaledDotProductAttention, backend="sdpa"),
+        "adlers-einsum": partial(ScaledDotProductAttention, backend="einsum"),
+        "adlers-probsparse": ProbSparseAttention,
+        "adlers-linear": LinearAttention,
+        "adlers-xca": partial(
+            CrossCovarianceAttention,
+            num_heads=query.shape[1],
+            learnable_temperature=False,
+        ),
+    }
+    attention = constructors[mechanism](
+        is_causal=is_causal,
+        dropout_rate=0.0,
+        strict_mode=True,
+    )
 
-    if mechanism == "adlers-probsparse":
-        attention = ProbSparseAttention(
-            is_causal=is_causal,
-            dropout_rate=0.0,
-            strict_mode=True,
-        )
-    elif mechanism == "adlers-linear":
-        attention = LinearAttention(
-            is_causal=is_causal,
-            dropout_rate=0.0,
-        )
-    else:
-        attention = ScaledDotProductAttention(
-            is_causal=is_causal,
-            dropout_rate=0.0,
-            strict_mode=True,
-            backend="sdpa" if mechanism == "adlers-sdpa" else "einsum",
-        )
-
-    attention = attention.to(device=query.device)
+    attention = attention.to(device=query.device, dtype=query.dtype)
     attention.train(mode=training)
 
     def call_adlers() -> Tensor:
@@ -436,7 +446,11 @@ def main(argv: list[str] | None = None) -> None:
     mechanisms = (
         (selected_mechanism,)
         if selected_mechanism
-        else tuple(_MECHANISM_LABELS)
+        else tuple(
+            mechanism
+            for mechanism in _MECHANISM_LABELS
+            if not (is_causal and mechanism == "adlers-xca")
+        )
     )
 
     cases = tuple(product(sequence_lengths, modes, mechanisms))
