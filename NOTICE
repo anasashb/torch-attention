@@ -6,6 +6,10 @@ https://github.com/zhouhaoyi/Informer2020
 Source revision:
 29f2a739226a509202a092b464163da81fa74960
 
+Original source files:
+models/attn.py
+utils/masking.py
+
 The adapted code is located in:
 src/adlers/time_series/prob_sparse.py
 
@@ -18,8 +22,14 @@ https://github.com/facebookresearch/xcit
 Source revision:
 82f5291f412604970c39a912586e008ec009cdca
 
+Original source file:
+xcit.py
+
 The adapted code is located in:
 src/adlers/vision/cross_covariance.py
+
+Copyright (c) 2015-present, Facebook, Inc.
+All rights reserved.
 
 XCiT is licensed under the Apache License, Version 2.0.
 See LICENSES/Apache-2.0.txt.
@@ -50,14 +60,25 @@ https://github.com/idiap/fast-transformers
 Source revision:
 2ad36b97e64cb93862937bd21fcc9568d989561f
 
+Original source files:
+fast_transformers/attention/linear_attention.py
+fast_transformers/attention/causal_linear_attention.py
+fast_transformers/causal_product/__init__.py
+fast_transformers/causal_product/causal_product_cpu.cpp
+fast_transformers/causal_product/causal_product_cuda.cu
+
 The adapted code is located in:
 src/adlers/nlp/linear_attention.py
 src/adlers/nlp/_causal_product.py
 src/adlers/csrc/causal_product_cpu.cpp
 src/adlers/csrc/cuda/causal_product_cuda.cu
 
+Copyright (c) 2020 Idiap Research Institute, http://www.idiap.ch/
+
 fast-transformers is licensed under the MIT License.
 See LICENSES/fast-transformers-MIT.txt.
+
+Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 
 The CUDA causal product includes modifications by NVIDIA Corporation that
 are licensed under the MIT License.
