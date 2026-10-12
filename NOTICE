@@ -24,6 +24,26 @@ src/adlers/vision/cross_covariance.py
 XCiT is licensed under the Apache License, Version 2.0.
 See LICENSES/Apache-2.0.txt.
 
+This project also includes software from Tensor2Tensor:
+https://github.com/tensorflow/tensor2tensor
+
+Source revision:
+bafdc1b67730430d38d6ab802cbd51f9d053ba2e
+
+Original source file:
+tensor2tensor/layers/common_attention.py
+
+The original TensorFlow reference is located in:
+tests/reference/tensor2tensor/common_attention.py
+
+The adapted code is located in:
+src/adlers/vision/local_attention.py
+
+Copyright 2023 The Tensor2Tensor Authors.
+
+Tensor2Tensor is licensed under the Apache License, Version 2.0.
+See LICENSES/Apache-2.0.txt.
+
 This project also includes software adapted from fast-transformers:
 https://github.com/idiap/fast-transformers
 
