@@ -36,7 +36,6 @@ import numpy as np
 from six.moves import range  # pylint: disable=redefined-builtin
 
 from tensor2tensor.layers import common_layers
-from tensor2tensor.utils import contrib
 from tensor2tensor.utils import expert_utils
 
 import tensorflow.compat.v1 as tf
@@ -173,7 +172,8 @@ def should_generate_summaries():
   Returns:
     a boolean
   """
-  name_scope = contrib.framework().get_name_scope()
+  # ADLERS: was contrib.framework().get_name_scope(); same call on TF2.
+  name_scope = tf.get_default_graph().get_name_scope()
   if name_scope and "while/" in name_scope:
     # Summaries don't work well within tf.while_loop()
     return False
@@ -496,7 +496,8 @@ def masked_local_attention_1d(q,
     batch, heads, length, depth_k = common_layers.shape_list(q)
     depth_v = common_layers.shape_list(v)[-1]
     if isinstance(block_length, tf.Tensor):
-      const = contrib.util().constant_value(block_length)
+      # ADLERS: was contrib.util().constant_value(); unavailable on TF2.
+      const = tf.get_static_value(block_length)
       if const is not None:
         block_length = int(const)
     # If (length < 2 * block_length), then we use only one block.
