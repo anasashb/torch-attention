@@ -1,6 +1,7 @@
 # Adapted from Tensor2Tensor:
 # https://github.com/tensorflow/tensor2tensor/blob/bafdc1b67730430d38d6ab802cbd51f9d053ba2e/tensor2tensor/layers/common_attention.py
 # https://github.com/tensorflow/tensor2tensor/blob/bafdc1b67730430d38d6ab802cbd51f9d053ba2e/tensor2tensor/layers/common_layers.py
+# https://github.com/tensorflow/tensor2tensor/blob/bafdc1b67730430d38d6ab802cbd51f9d053ba2e/tensor2tensor/utils/expert_utils.py
 #
 # Licensed under the Apache License, Version 2.0.
 # This file has been modified for ADLERS.
@@ -200,6 +201,38 @@ def cast_like(x, y):
     tf.logging.warning("Cast for %s may induce copy from '%s' to '%s'", x_name,
                        x.device, cast_x.device)
   return cast_x
+
+
+# From tensor2tensor/utils/expert_utils.py
+def add_scope(scope=None, scope_fn=None):
+  """Return a decorator which add a TF name/variable scope to a function.
+
+  Note that the function returned by the decorator accept an additional 'name'
+  parameter, which can overwrite the name scope given when the function is
+  created.
+
+  Args:
+    scope (str): name of the scope. If None, the function name is used.
+    scope_fn (fct): Either tf.name_scope or tf.variable_scope
+
+  Returns:
+    fct: the add_scope decorator
+  """
+  def decorator(f):
+
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+      name = kwargs.pop("name", None)  # Python 2 hack for keyword only args
+      with scope_fn(name or scope or f.__name__):
+        return f(*args, **kwargs)
+
+    return decorated
+
+  return decorator
+
+
+def add_name_scope(scope=None):
+  return add_scope(scope, scope_fn=tf.name_scope)
 
 
 # From tensor2tensor/layers/common_attention.py
