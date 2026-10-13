@@ -35,9 +35,6 @@ import numpy as np
 
 from six.moves import range  # pylint: disable=redefined-builtin
 
-from tensor2tensor.layers import common_layers
-from tensor2tensor.utils import expert_utils
-
 import tensorflow.compat.v1 as tf
 
 
@@ -254,7 +251,7 @@ def maybe_upcast(logits,
   return logits
 
 
-@expert_utils.add_name_scope()
+@add_name_scope()
 def embedding_to_padding(emb):
   """Calculates the padding mask based on which embeddings are all zero.
 
@@ -271,7 +268,7 @@ def embedding_to_padding(emb):
   return tf.to_float(tf.equal(emb_sum, 0.0))
 
 
-@expert_utils.add_name_scope()
+@add_name_scope()
 def attention_bias_local(length, max_backward, max_forward):
   """Create an bias tensor to be added to attention logits.
 
@@ -290,7 +287,7 @@ def attention_bias_local(length, max_backward, max_forward):
   Returns:
     a `Tensor` with shape [1, 1, length, length].
   """
-  band = common_layers.ones_matrix_band_part(
+  band = ones_matrix_band_part(
       length,
       length,
       max_backward,
@@ -299,7 +296,7 @@ def attention_bias_local(length, max_backward, max_forward):
   return -1e9 * (1.0 - band)
 
 
-@expert_utils.add_name_scope()
+@add_name_scope()
 def attention_bias_lower_triangle(length):
   """Create an bias tensor to be added to attention logits.
 
@@ -314,7 +311,7 @@ def attention_bias_lower_triangle(length):
   return attention_bias_local(length, -1, 0)
 
 
-@expert_utils.add_name_scope()
+@add_name_scope()
 def split_last_dimension(x, n):
   """Reshape x so that the last dimension becomes two dimensions.
 
@@ -327,7 +324,7 @@ def split_last_dimension(x, n):
   Returns:
     a Tensor with shape [..., n, m/n]
   """
-  x_shape = common_layers.shape_list(x)
+  x_shape = shape_list(x)
   m = x_shape[-1]
   if isinstance(m, int) and isinstance(n, int):
     assert m % n == 0
@@ -349,7 +346,7 @@ def attention_image_summary(attn, image_shapes=None):
          memory_rows, memory_cols, memory_channels).
   """
   attn = tf.cast(attn, tf.float32)
-  num_heads = common_layers.shape_list(attn)[1]
+  num_heads = shape_list(attn)[1]
   # [batch, query_length, memory_length, num_heads]
   image = tf.transpose(attn, [0, 2, 3, 1])
   image = tf.pow(image, 0.2)  # for high-dynamic-range
@@ -389,7 +386,7 @@ def harden_attention_weights(weights, k, gumbel_noise_weight):
   # Subtract the top-kth weight and zero-out all lower ones.
   # Note that currently in case of numerical ties it will retain more
   # than k elements. In the future, we may want to avoid this.
-  weights -= common_layers.top_kth_iterative(weights, k)
+  weights -= top_kth_iterative(weights, k)
   weights = tf.nn.relu(weights)
   # Re-normalize the weights.
   weights_sum = tf.reduce_sum(weights, axis=-1, keep_dims=True)
@@ -446,7 +443,7 @@ def dot_product_attention(q,
       name, default_name="dot_product_attention", values=[q, k, v]) as scope:
     logits = tf.matmul(q, k, transpose_b=True)  # [..., length_q, length_kv]
     if bias is not None:
-      bias = common_layers.cast_like(bias, logits)
+      bias = cast_like(bias, logits)
       logits += bias
     # If logits are fp16, upcast before softmax
     logits = maybe_upcast(logits, activation_dtype, weight_dtype)
@@ -454,14 +451,14 @@ def dot_product_attention(q,
     if hard_attention_k > 0:
       weights = harden_attention_weights(weights, hard_attention_k,
                                          gumbel_noise_weight)
-    weights = common_layers.cast_like(weights, q)
+    weights = cast_like(weights, q)
     if save_weights_to is not None:
       save_weights_to[scope.name] = weights
       save_weights_to[scope.name + "/logits"] = logits
     # Drop out attention links for each head.
-    weights = common_layers.dropout_with_broadcast_dims(
+    weights = dropout_with_broadcast_dims(
         weights, 1.0 - dropout_rate, broadcast_dims=dropout_broadcast_dims)
-    if common_layers.should_generate_summaries() and make_image_summary:
+    if should_generate_summaries() and make_image_summary:
       attention_image_summary(weights, image_shapes)
     return tf.matmul(weights, v)
 
@@ -493,8 +490,8 @@ def masked_local_attention_1d(q,
   """
   with tf.variable_scope(
       name, default_name="local_attention_1d", values=[q, k, v]):
-    batch, heads, length, depth_k = common_layers.shape_list(q)
-    depth_v = common_layers.shape_list(v)[-1]
+    batch, heads, length, depth_k = shape_list(q)
+    depth_v = shape_list(v)[-1]
     if isinstance(block_length, tf.Tensor):
       # ADLERS: was contrib.util().constant_value(); unavailable on TF2.
       const = tf.get_static_value(block_length)
@@ -547,10 +544,10 @@ def masked_local_attention_1d(q,
     tail_q = tf.slice(q, [0, 0, 1, 0, 0], [-1, -1, -1, -1, -1])
     tail_q = tf.reshape(tail_q,
                         [batch, heads, num_blocks - 1, block_length, depth_k])
-    local_length = common_layers.shape_list(local_k)[3]
+    local_length = shape_list(local_k)[3]
 
     # make sure source_pos <= target_pos
-    good_part = common_layers.ones_matrix_band_part(
+    good_part = ones_matrix_band_part(
         block_length,
         local_length,
         -1,
@@ -613,11 +610,11 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
     q.get_shape()[:-1].assert_is_compatible_with(k.get_shape()[:-1])
     q.get_shape()[:-1].assert_is_compatible_with(v.get_shape()[:-1])
 
-    batch_size, num_heads, original_length, _ = common_layers.shape_list(q)
+    batch_size, num_heads, original_length, _ = shape_list(q)
 
     # Pad query, key, value to ensure multiple of corresponding lengths.
     def pad_to_multiple(x, pad_length):
-      x_length = common_layers.shape_list(x)[2]
+      x_length = shape_list(x)[2]
       return tf.pad(x, [[0, 0], [0, 0], [0, -x_length % pad_length], [0, 0]])
 
     def pad_l_and_r(x, pad_length):
@@ -626,8 +623,8 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
     # Set up query blocks.
     # [batch, heads, blocks_q, block_length, depth_k]
     q = pad_to_multiple(q, block_length)
-    q = reshape_by_blocks(q, common_layers.shape_list(q), block_length)
-    total_query_blocks = common_layers.shape_list(q)[2]
+    q = reshape_by_blocks(q, shape_list(q), block_length)
+    total_query_blocks = shape_list(q)[2]
 
     # Set up key and value blocks.
     # [batch, heads, blocks_k, block_length, depth_k]
@@ -637,10 +634,10 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
     v = pad_to_multiple(v, block_length)
     k = pad_l_and_r(k, filter_width + block_length - remaining_items)
     v = pad_l_and_r(v, filter_width + block_length - remaining_items)
-    k = reshape_by_blocks(k, common_layers.shape_list(k), block_length)
-    v = reshape_by_blocks(v, common_layers.shape_list(v), block_length)
+    k = reshape_by_blocks(k, shape_list(k), block_length)
+    v = reshape_by_blocks(v, shape_list(v), block_length)
 
-    total_kv_blocks = common_layers.shape_list(k)[2]
+    total_kv_blocks = shape_list(k)[2]
 
     slices = []
     # prepare the left-most and right-most partial blocks if needed
@@ -674,7 +671,7 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
     v = tf.concat([s[1] for s in slices], axis=3)
 
     attention_bias = tf.expand_dims(embedding_to_padding(k) * -1e9, axis=-2)
-    depth_v = common_layers.shape_list(v)[-1]
+    depth_v = shape_list(v)[-1]
 
     output = dot_product_attention(
         q,
@@ -741,7 +738,7 @@ def local_attention_2d(q,
   """
   with tf.variable_scope(
       name, default_name="local_self_attention_2d", values=[q, k, v]):
-    v_shape = common_layers.shape_list(v)
+    v_shape = shape_list(v)
 
     # Pad query, key, value to ensure multiple of corresponding lengths.
     q = pad_to_multiple_2d(q, query_shape)
@@ -774,7 +771,7 @@ def local_attention_2d(q,
         name="local_2d",
         make_image_summary=False)
     # Put representations back into original shapes.
-    padded_q_shape = common_layers.shape_list(q)
+    padded_q_shape = shape_list(q)
     output = scatter_blocks_2d(output, q_indices, padded_q_shape)
 
     # Remove the padding if introduced.
@@ -796,12 +793,12 @@ def pad_to_multiple_2d(x, block_shape):
   old_shape = x.get_shape().dims
   last = old_shape[-1]
   if len(old_shape) == 4:
-    height_padding = -common_layers.shape_list(x)[1] % block_shape[0]
-    width_padding = -common_layers.shape_list(x)[2] % block_shape[1]
+    height_padding = -shape_list(x)[1] % block_shape[0]
+    width_padding = -shape_list(x)[2] % block_shape[1]
     paddings = [[0, 0], [0, height_padding], [0, width_padding], [0, 0]]
   elif len(old_shape) == 5:
-    height_padding = -common_layers.shape_list(x)[2] % block_shape[0]
-    width_padding = -common_layers.shape_list(x)[3] % block_shape[1]
+    height_padding = -shape_list(x)[2] % block_shape[0]
+    width_padding = -shape_list(x)[3] % block_shape[1]
     paddings = [[0, 0], [0, 0], [0, height_padding], [0, width_padding], [0, 0]]
 
   padded_x = tf.pad(x, paddings)
@@ -813,14 +810,14 @@ def pad_to_multiple_2d(x, block_shape):
 
 def reshape_range(tensor, i, j, shape):
   """Reshapes a tensor between dimensions i and j."""
-  t_shape = common_layers.shape_list(tensor)
+  t_shape = shape_list(tensor)
   target_shape = t_shape[:i] + shape + t_shape[j:]
   return tf.reshape(tensor, target_shape)
 
 
 def gather_blocks_2d(x, indices):
   """Gathers flattened blocks from x."""
-  x_shape = common_layers.shape_list(x)
+  x_shape = shape_list(x)
   x = reshape_range(x, 2, 4, [tf.reduce_prod(x_shape[2:4])])
   # [length, batch, heads, dim]
   x_t = tf.transpose(x, [2, 0, 1, 3])
@@ -831,11 +828,11 @@ def gather_blocks_2d(x, indices):
 
 def scatter_blocks_2d(x, indices, shape):
   """scatters blocks from x into shape with indices."""
-  x_shape = common_layers.shape_list(x)
+  x_shape = shape_list(x)
   # [length, batch, heads, dim]
   x_t = tf.transpose(
       tf.reshape(x, [x_shape[0], x_shape[1], -1, x_shape[-1]]), [2, 0, 1, 3])
-  x_t_shape = common_layers.shape_list(x_t)
+  x_t_shape = shape_list(x_t)
   indices = tf.reshape(indices, [-1, 1])
   scattered_x = tf.scatter_nd(indices, x_t, x_t_shape)
   scattered_x = tf.transpose(scattered_x, [1, 2, 0, 3])
@@ -848,7 +845,7 @@ def gather_indices_2d(x, block_shape, block_stride):
   kernel = tf.eye(block_shape[0] * block_shape[1])
   kernel = reshape_range(kernel, 0, 1, [block_shape[0], block_shape[1], 1])
   # making indices [1, h, w, 1] to appy convs
-  x_shape = common_layers.shape_list(x)
+  x_shape = shape_list(x)
   indices = tf.range(x_shape[2] * x_shape[3])
   indices = tf.reshape(indices, [1, x_shape[2], x_shape[3], 1])
   indices = tf.nn.conv2d(
@@ -857,7 +854,7 @@ def gather_indices_2d(x, block_shape, block_stride):
       strides=[1, block_stride[0], block_stride[1], 1],
       padding="VALID")
   # making indices [num_blocks, dim] to gather
-  dims = common_layers.shape_list(indices)[:3]
+  dims = shape_list(indices)[:3]
   if all([isinstance(dim, int) for dim in dims]):
     num_blocks = functools.reduce(operator.mul, dims, 1)
   else:
@@ -952,7 +949,7 @@ def masked_local_attention_2d(q,
   """
   with tf.variable_scope(
       name, default_name="local_masked_self_attention_2d", values=[q, k, v]):
-    v_shape = common_layers.shape_list(v)
+    v_shape = shape_list(v)
 
     # Pad query to ensure multiple of corresponding lengths.
     q = pad_to_multiple_2d(q, query_shape)
@@ -985,7 +982,7 @@ def masked_local_attention_2d(q,
         np.prod(query_elements))
     center_attention_bias = tf.reshape(
         center_attention_bias, [1, 1, 1, query_elements, query_elements])
-    v_center_shape = common_layers.shape_list(v_center)
+    v_center_shape = shape_list(v_center)
     center_attention_bias = tf.tile(
         center_attention_bias,
         [v_center_shape[0], v_center_shape[1], v_center_shape[2], 1, 1])
@@ -1004,7 +1001,7 @@ def masked_local_attention_2d(q,
         name="masked_local_2d",
         make_image_summary=False)
     # Put representations back into original shapes.
-    padded_q_shape = common_layers.shape_list(q)
+    padded_q_shape = shape_list(q)
     output = scatter_blocks_2d(output, q_indices, padded_q_shape)
 
     # Remove the padding if introduced.
