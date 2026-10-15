@@ -27,7 +27,6 @@ import operator
 
 import numpy as np
 import tensorflow.compat.v1 as tf
-from six.moves import range  # pylint: disable=redefined-builtin
 from tensor2tensor.layers import common_layers
 from tensor2tensor.utils import contrib, expert_utils
 
