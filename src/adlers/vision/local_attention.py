@@ -28,7 +28,7 @@ import operator
 import numpy as np
 import tensorflow.compat.v1 as tf
 from tensor2tensor.layers import common_layers
-from tensor2tensor.utils import contrib, expert_utils
+from tensor2tensor.utils import expert_utils
 
 
 def mixed_precision_is_enabled(
