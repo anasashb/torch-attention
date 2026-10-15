@@ -26,7 +26,6 @@ import functools
 import operator
 
 import numpy as np
-import tensorflow.compat.v1 as tf
 
 
 def mixed_precision_is_enabled(
