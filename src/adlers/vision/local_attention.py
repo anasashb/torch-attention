@@ -27,7 +27,6 @@ import operator
 
 import numpy as np
 import tensorflow.compat.v1 as tf
-from tensor2tensor.utils import expert_utils
 
 
 def mixed_precision_is_enabled(
@@ -54,7 +53,6 @@ def maybe_upcast(
     return logits
 
 
-@expert_utils.add_name_scope()
 def embedding_to_padding(emb):
     """Calculates the padding mask based on which embeddings are all zero.
 
@@ -71,7 +69,6 @@ def embedding_to_padding(emb):
     return tf.to_float(tf.equal(emb_sum, 0.0))
 
 
-@expert_utils.add_name_scope()
 def attention_bias_local(length, max_backward, max_forward):
     """Create an bias tensor to be added to attention logits.
 
@@ -100,7 +97,6 @@ def attention_bias_local(length, max_backward, max_forward):
     return -1e9 * (1.0 - band)
 
 
-@expert_utils.add_name_scope()
 def attention_bias_lower_triangle(length):
     """Create an bias tensor to be added to attention logits.
 
@@ -115,7 +111,6 @@ def attention_bias_lower_triangle(length):
     return attention_bias_local(length, -1, 0)
 
 
-@expert_utils.add_name_scope()
 def split_last_dimension(x, n):
     """Reshape x so that the last dimension becomes two dimensions.
 
