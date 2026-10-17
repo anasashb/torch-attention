@@ -26,6 +26,7 @@ import functools
 import operator
 
 import numpy as np
+import torch
 
 
 def mixed_precision_is_enabled(
@@ -64,8 +65,8 @@ def embedding_to_padding(emb):
       a float Tensor with shape [...]. Each element is 1 if its corresponding
       embedding vector is all zero, and is 0 otherwise.
     """
-    emb_sum = tf.reduce_sum(tf.abs(emb), axis=-1)
-    return tf.to_float(tf.equal(emb_sum, 0.0))
+    emb_sum = torch.sum(input=torch.abs(input=emb), dim=-1)
+    return torch.eq(input=emb_sum, other=0.0).to(dtype=torch.float32)
 
 
 def attention_bias_local(length, max_backward, max_forward):
