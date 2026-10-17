@@ -1,5 +1,6 @@
 # Adapted from Tensor2Tensor:
 # https://github.com/tensorflow/tensor2tensor/blob/bafdc1b67730430d38d6ab802cbd51f9d053ba2e/tensor2tensor/layers/common_attention.py
+# https://github.com/tensorflow/tensor2tensor/blob/bafdc1b67730430d38d6ab802cbd51f9d053ba2e/tensor2tensor/layers/common_layers.py
 #
 # Licensed under the Apache License, Version 2.0.
 # This file has been modified for ADLERS.
@@ -27,6 +28,45 @@ import operator
 
 import numpy as np
 import torch
+
+
+def ones_matrix_band_part(rows, cols, num_lower, num_upper, out_shape=None):
+    """Matrix band part of ones.
+
+    Args:
+      rows: int determining number of rows in output
+      cols: int
+      num_lower: int, maximum distance backward. Negative values indicate
+        unlimited.
+      num_upper: int, maximum distance forward. Negative values indicate
+        unlimited.
+      out_shape: shape to reshape output by.
+
+    Returns:
+      Tensor of size rows * cols reshaped into shape out_shape.
+    """
+    if all([isinstance(el, int) for el in [rows, cols, num_lower, num_upper]]):
+        # Needed info is constant, so we construct in numpy
+        if num_lower < 0:
+            num_lower = rows - 1
+        if num_upper < 0:
+            num_upper = cols - 1
+        lower_mask = np.tri(cols, rows, num_lower).T
+        upper_mask = np.tri(rows, cols, num_upper)
+        band = np.ones((rows, cols)) * lower_mask * upper_mask
+        if out_shape:
+            band = band.reshape(out_shape)
+        band = tf.constant(band, tf.float32)
+    else:
+        band = tf.linalg.band_part(
+            tf.ones([rows, cols]),
+            tf.cast(num_lower, tf.int64),
+            tf.cast(num_upper, tf.int64),
+        )
+        if out_shape:
+            band = tf.reshape(band, out_shape)
+
+    return band
 
 
 def mixed_precision_is_enabled(
