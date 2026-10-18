@@ -56,15 +56,15 @@ def ones_matrix_band_part(rows, cols, num_lower, num_upper, out_shape=None):
         band = np.ones((rows, cols)) * lower_mask * upper_mask
         if out_shape:
             band = band.reshape(out_shape)
-        band = tf.constant(band, tf.float32)
+        band = torch.tensor(data=band, dtype=torch.float32)
     else:
-        band = tf.linalg.band_part(
-            tf.ones([rows, cols]),
-            tf.cast(num_lower, tf.int64),
-            tf.cast(num_upper, tf.int64),
-        )
+        row_index = torch.arange(end=rows)[:, None]
+        col_index = torch.arange(end=cols)[None, :]
+        in_lower = (num_lower < 0) | (row_index - col_index <= num_lower)
+        in_upper = (num_upper < 0) | (col_index - row_index <= num_upper)
+        band = (in_lower & in_upper).to(dtype=torch.float32)
         if out_shape:
-            band = tf.reshape(band, out_shape)
+            band = torch.reshape(input=band, shape=out_shape)
 
     return band
 
