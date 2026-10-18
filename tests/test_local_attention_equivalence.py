@@ -96,3 +96,53 @@ def test_ones_matrix_band_part_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("length", "max_backward", "max_forward"),
+    argvalues=[
+        pytest.param(4, -1, 0, id="causal"),
+        pytest.param(5, 1, 1, id="window"),
+        pytest.param(5, -1, -1, id="unlimited"),
+        pytest.param(1, 0, 0, id="single"),
+    ],
+)
+@pytest.mark.parametrize(
+    argnames="length_type",
+    argvalues=["int", "numpy", "tensor"],
+)
+def test_attention_bias_local_matches_reference(
+    length: int,
+    max_backward: int,
+    max_forward: int,
+    length_type: str,
+) -> None:
+    """Checks attention_bias_local against the Tensor2Tensor reference."""
+    tf_lengths = {
+        "int": length,
+        "numpy": np.int64(length),
+        "tensor": tf.constant(value=length),
+    }
+    torch_lengths = {
+        "int": length,
+        "numpy": np.int64(length),
+        "tensor": torch.tensor(data=length),
+    }
+
+    expected = common_attention.attention_bias_local(
+        length=tf_lengths[length_type],
+        max_backward=max_backward,
+        max_forward=max_forward,
+    )
+    actual = local_attention.attention_bias_local(
+        length=torch_lengths[length_type],
+        max_backward=max_backward,
+        max_forward=max_forward,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
