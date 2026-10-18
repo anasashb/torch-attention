@@ -127,11 +127,11 @@ def attention_bias_local(length, max_backward, max_forward):
     Returns:
       a `Tensor` with shape [1, 1, length, length].
     """
-    band = common_layers.ones_matrix_band_part(
-        length,
-        length,
-        max_backward,
-        max_forward,
+    band = ones_matrix_band_part(
+        rows=length,
+        cols=length,
+        num_lower=max_backward,
+        num_upper=max_forward,
         out_shape=[1, 1, length, length],
     )
     return -1e9 * (1.0 - band)
