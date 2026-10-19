@@ -146,3 +146,39 @@ def test_attention_bias_local_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(argnames="length", argvalues=[1, 4])
+@pytest.mark.parametrize(
+    argnames="length_type",
+    argvalues=["int", "numpy", "tensor"],
+)
+def test_attention_bias_lower_triangle_matches_reference(
+    length: int,
+    length_type: str,
+) -> None:
+    """Checks attention_bias_lower_triangle against Tensor2Tensor."""
+    tf_lengths = {
+        "int": length,
+        "numpy": np.int64(length),
+        "tensor": tf.constant(value=length),
+    }
+    torch_lengths = {
+        "int": length,
+        "numpy": np.int64(length),
+        "tensor": torch.tensor(data=length),
+    }
+
+    expected = common_attention.attention_bias_lower_triangle(
+        length=tf_lengths[length_type]
+    )
+    actual = local_attention.attention_bias_lower_triangle(
+        length=torch_lengths[length_type]
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
