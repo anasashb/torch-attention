@@ -148,7 +148,7 @@ def attention_bias_lower_triangle(length):
     Returns:
       a `Tensor` with shape [1, 1, length, length].
     """
-    return attention_bias_local(length, -1, 0)
+    return attention_bias_local(length=length, max_backward=-1, max_forward=0)
 
 
 def split_last_dimension(x, n):
