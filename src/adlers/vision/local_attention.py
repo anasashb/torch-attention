@@ -153,7 +153,6 @@ def dot_product_attention(
     bias,
     dropout_rate=0.0,
     name=None,
-    save_weights_to=None,
     dropout_broadcast_dims=None,
 ):
     """Dot-product attention.
@@ -167,9 +166,6 @@ def dot_product_attention(
       bias: bias Tensor (see attention_bias())
       dropout_rate: a float.
       name: an optional string
-      save_weights_to: an optional dictionary to capture attention weights
-        for visualization; the weights tensor will be appended there under
-        a string key created from the variable scope (including name).
       dropout_broadcast_dims: an optional list of integers less than rank of q.
         Specifies in which dimensions to broadcast the dropout decisions.
 
@@ -178,16 +174,13 @@ def dot_product_attention(
     """
     with tf.variable_scope(
         name, default_name="dot_product_attention", values=[q, k, v]
-    ) as scope:
+    ):
         logits = tf.matmul(q, k, transpose_b=True)  # [..., length_q, length_kv]
         if bias is not None:
             bias = common_layers.cast_like(bias, logits)
             logits += bias
         weights = tf.nn.softmax(logits, name="attention_weights")
         weights = common_layers.cast_like(weights, q)
-        if save_weights_to is not None:
-            save_weights_to[scope.name] = weights
-            save_weights_to[scope.name + "/logits"] = logits
         # Drop out attention links for each head.
         weights = common_layers.dropout_with_broadcast_dims(
             weights, 1.0 - dropout_rate, broadcast_dims=dropout_broadcast_dims
