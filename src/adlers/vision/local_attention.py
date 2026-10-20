@@ -146,76 +146,13 @@ def split_last_dimension(x, n):
     return tf.reshape(x, x_shape[:-1] + [n, m // n])
 
 
-def attention_image_summary(attn, image_shapes=None):
-    """Compute color image summary.
-
-    Args:
-      attn: a Tensor with shape [batch, num_heads, query_length, memory_length]
-      image_shapes: optional tuple of integer scalars.
-        If the query positions and memory positions represent the
-        pixels of flattened images, then pass in their dimensions:
-          (query_rows, query_cols, memory_rows, memory_cols).
-        If the query positions and memory positions represent the
-        pixels x channels of flattened images, then pass in their dimensions:
-          (query_rows, query_cols, query_channels,
-           memory_rows, memory_cols, memory_channels).
-    """
-    attn = tf.cast(attn, tf.float32)
-    num_heads = common_layers.shape_list(attn)[1]
-    # [batch, query_length, memory_length, num_heads]
-    image = tf.transpose(attn, [0, 2, 3, 1])
-    image = tf.pow(image, 0.2)  # for high-dynamic-range
-    # Each head will correspond to one of RGB.
-    # pad the heads to be a multiple of 3
-    image = tf.pad(image, [[0, 0], [0, 0], [0, 0], [0, tf.mod(-num_heads, 3)]])
-    image = split_last_dimension(image, 3)
-    image = tf.reduce_max(image, 4)
-    if image_shapes is not None:
-        if len(image_shapes) == 4:
-            q_rows, q_cols, m_rows, m_cols = list(image_shapes)
-            image = tf.reshape(image, [-1, q_rows, q_cols, m_rows, m_cols, 3])
-            image = tf.transpose(image, [0, 1, 3, 2, 4, 5])
-            image = tf.reshape(image, [-1, q_rows * m_rows, q_cols * m_cols, 3])
-        else:
-            assert len(image_shapes) == 6
-            q_rows, q_cols, q_channnels, m_rows, m_cols, m_channels = list(
-                image_shapes
-            )
-            image = tf.reshape(
-                image,
-                [
-                    -1,
-                    q_rows,
-                    q_cols,
-                    q_channnels,
-                    m_rows,
-                    m_cols,
-                    m_channels,
-                    3,
-                ],
-            )
-            image = tf.transpose(image, [0, 1, 4, 3, 2, 5, 6, 7])
-            image = tf.reshape(
-                image,
-                [
-                    -1,
-                    q_rows * m_rows * q_channnels,
-                    q_cols * m_cols * m_channels,
-                    3,
-                ],
-            )
-    tf.summary.image("attention", image, max_outputs=1)
-
-
 def dot_product_attention(
     q,
     k,
     v,
     bias,
     dropout_rate=0.0,
-    image_shapes=None,
     name=None,
-    make_image_summary=True,
     save_weights_to=None,
     dropout_broadcast_dims=None,
 ):
@@ -229,10 +166,7 @@ def dot_product_attention(
         match with q.
       bias: bias Tensor (see attention_bias())
       dropout_rate: a float.
-      image_shapes: optional tuple of integer scalars.
-        see comments for attention_image_summary()
       name: an optional string
-      make_image_summary: True if you want an image summary.
       save_weights_to: an optional dictionary to capture attention weights
         for visualization; the weights tensor will be appended there under
         a string key created from the variable scope (including name).
@@ -258,8 +192,6 @@ def dot_product_attention(
         weights = common_layers.dropout_with_broadcast_dims(
             weights, 1.0 - dropout_rate, broadcast_dims=dropout_broadcast_dims
         )
-        if common_layers.should_generate_summaries() and make_image_summary:
-            attention_image_summary(weights, image_shapes)
         return tf.matmul(weights, v)
 
 
@@ -268,7 +200,6 @@ def masked_local_attention_1d(
     k,
     v,
     block_length=128,
-    make_image_summary=False,
     dropout_rate=0.0,
     name=None,
 ):
@@ -283,7 +214,6 @@ def masked_local_attention_1d(
       k: a Tensor with shape [batch, heads, length, depth_k]
       v: a Tensor with shape [batch, heads, length, depth_v]
       block_length: an integer
-      make_image_summary: a boolean, whether to make an attention image summary.
       dropout_rate: Dropout rate for attention dropout
       name: an optional string
 
@@ -332,7 +262,6 @@ def masked_local_attention_1d(
             first_v,
             attention_bias_lower_triangle(block_length),
             dropout_rate=dropout_rate,
-            make_image_summary=make_image_summary,
             name="first_block",
         )
 
@@ -371,7 +300,6 @@ def masked_local_attention_1d(
             local_v,
             bias,
             dropout_rate=dropout_rate,
-            make_image_summary=False,
             name="tail_block",
         )
         tail_output = tf.reshape(
@@ -504,7 +432,6 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
             attention_bias,
             dropout_rate=0.0,
             name="local_1d",
-            make_image_summary=False,
         )
         output = tf.reshape(output, [batch_size, num_heads, -1, depth_v])
 
@@ -610,7 +537,6 @@ def local_attention_2d(
             attention_bias,
             dropout_rate=0.0,
             name="local_2d",
-            make_image_summary=False,
         )
         # Put representations back into original shapes.
         padded_q_shape = common_layers.shape_list(q)
@@ -870,7 +796,6 @@ def masked_local_attention_2d(
             attention_bias,
             dropout_rate=0.0,
             name="masked_local_2d",
-            make_image_summary=False,
         )
         # Put representations back into original shapes.
         padded_q_shape = common_layers.shape_list(q)
