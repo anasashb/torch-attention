@@ -231,30 +231,6 @@ def attention_image_summary(attn, image_shapes=None):
     tf.summary.image("attention", image, max_outputs=1)
 
 
-def harden_attention_weights(weights, k, gumbel_noise_weight):
-    """Make attention weights non-0 only on the top k ones."""
-    if gumbel_noise_weight > 0.0:
-        gumbel_noise = -tf.log(
-            -tf.log(
-                tf.random_uniform(
-                    tf.shape(weights), minval=1e-5, maxval=1 - 1e-5
-                )
-            )
-        )
-        weights += gumbel_noise * gumbel_noise_weight
-
-    # Subtract the top-kth weight and zero-out all lower ones.
-    # Note that currently in case of numerical ties it will retain more
-    # than k elements. In the future, we may want to avoid this.
-    weights -= common_layers.top_kth_iterative(weights, k)
-    weights = tf.nn.relu(weights)
-    # Re-normalize the weights.
-    weights_sum = tf.reduce_sum(weights, axis=-1, keep_dims=True)
-    weights_sum = tf.maximum(weights_sum, 1e-6)  # Avoid division by 0.
-    weights /= weights_sum
-    return weights
-
-
 def dot_product_attention(
     q,
     k,
@@ -268,8 +244,6 @@ def dot_product_attention(
     dropout_broadcast_dims=None,
     activation_dtype=None,
     weight_dtype=None,
-    hard_attention_k=0,
-    gumbel_noise_weight=0.0,
 ):
     """Dot-product attention.
 
@@ -293,10 +267,6 @@ def dot_product_attention(
       activation_dtype: Used to define function activation dtype when using
         mixed precision.
       weight_dtype: The dtype weights are stored in when using mixed precision
-      hard_attention_k: integer, if > 0 triggers hard attention (picking top-k)
-      gumbel_noise_weight: if > 0, apply Gumbel noise with weight
-        `gumbel_noise_weight` before picking top-k. This is a no op if
-        hard_attention_k <= 0.
 
     Returns:
       Tensor with shape [..., length_q, depth_v].
@@ -311,10 +281,6 @@ def dot_product_attention(
         # If logits are fp16, upcast before softmax
         logits = maybe_upcast(logits, activation_dtype, weight_dtype)
         weights = tf.nn.softmax(logits, name="attention_weights")
-        if hard_attention_k > 0:
-            weights = harden_attention_weights(
-                weights, hard_attention_k, gumbel_noise_weight
-            )
         weights = common_layers.cast_like(weights, q)
         if save_weights_to is not None:
             save_weights_to[scope.name] = weights
