@@ -69,30 +69,6 @@ def ones_matrix_band_part(rows, cols, num_lower, num_upper, out_shape=None):
     return band
 
 
-def mixed_precision_is_enabled(
-    activation_dtype=None, weight_dtype=None, hparams=None
-):
-    assert not (
-        hparams and (activation_dtype or weight_dtype)
-    ), "Provide only hparams or activation_dtype and weight_dtype"
-    if (
-        hparams
-        and hasattr(hparams, "activation_dtype")
-        and hasattr(hparams, "weight_dtype")
-    ):
-        activation_dtype = hparams.activation_dtype
-        weight_dtype = hparams.weight_dtype
-    return activation_dtype == tf.float16 and weight_dtype == tf.float32
-
-
-def maybe_upcast(
-    logits, activation_dtype=None, weight_dtype=None, hparams=None
-):
-    if mixed_precision_is_enabled(activation_dtype, weight_dtype, hparams):
-        return tf.cast(logits, tf.float32)
-    return logits
-
-
 def embedding_to_padding(emb):
     """Calculates the padding mask based on which embeddings are all zero.
 
@@ -242,8 +218,6 @@ def dot_product_attention(
     make_image_summary=True,
     save_weights_to=None,
     dropout_broadcast_dims=None,
-    activation_dtype=None,
-    weight_dtype=None,
 ):
     """Dot-product attention.
 
@@ -264,9 +238,6 @@ def dot_product_attention(
         a string key created from the variable scope (including name).
       dropout_broadcast_dims: an optional list of integers less than rank of q.
         Specifies in which dimensions to broadcast the dropout decisions.
-      activation_dtype: Used to define function activation dtype when using
-        mixed precision.
-      weight_dtype: The dtype weights are stored in when using mixed precision
 
     Returns:
       Tensor with shape [..., length_q, depth_v].
@@ -278,8 +249,6 @@ def dot_product_attention(
         if bias is not None:
             bias = common_layers.cast_like(bias, logits)
             logits += bias
-        # If logits are fp16, upcast before softmax
-        logits = maybe_upcast(logits, activation_dtype, weight_dtype)
         weights = tf.nn.softmax(logits, name="attention_weights")
         weights = common_layers.cast_like(weights, q)
         if save_weights_to is not None:
