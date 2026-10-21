@@ -152,7 +152,6 @@ def dot_product_attention(
     v,
     bias,
     dropout_rate=0.0,
-    name=None,
 ):
     """Dot-product attention.
 
@@ -164,23 +163,19 @@ def dot_product_attention(
         match with q.
       bias: bias Tensor (see attention_bias())
       dropout_rate: a float.
-      name: an optional string
 
     Returns:
       Tensor with shape [..., length_q, depth_v].
     """
-    with tf.variable_scope(
-        name, default_name="dot_product_attention", values=[q, k, v]
-    ):
-        logits = tf.matmul(q, k, transpose_b=True)  # [..., length_q, length_kv]
-        if bias is not None:
-            bias = common_layers.cast_like(bias, logits)
-            logits += bias
-        weights = tf.nn.softmax(logits, name="attention_weights")
-        weights = common_layers.cast_like(weights, q)
-        # Drop out attention links for each head.
-        weights = tf.nn.dropout(weights, 1.0 - dropout_rate)
-        return tf.matmul(weights, v)
+    logits = tf.matmul(q, k, transpose_b=True)  # [..., length_q, length_kv]
+    if bias is not None:
+        bias = common_layers.cast_like(bias, logits)
+        logits += bias
+    weights = tf.nn.softmax(logits, name="attention_weights")
+    weights = common_layers.cast_like(weights, q)
+    # Drop out attention links for each head.
+    weights = tf.nn.dropout(weights, 1.0 - dropout_rate)
+    return tf.matmul(weights, v)
 
 
 def masked_local_attention_1d(
@@ -189,7 +184,6 @@ def masked_local_attention_1d(
     v,
     block_length=128,
     dropout_rate=0.0,
-    name=None,
 ):
     """Attention to the source position and a neighborhood to the left of it.
 
@@ -203,103 +197,97 @@ def masked_local_attention_1d(
       v: a Tensor with shape [batch, heads, length, depth_v]
       block_length: an integer
       dropout_rate: Dropout rate for attention dropout
-      name: an optional string
 
     Returns:
       a Tensor of shape [batch, heads, length, depth_v]
     """
-    with tf.variable_scope(
-        name, default_name="local_attention_1d", values=[q, k, v]
-    ):
-        batch, heads, length, depth_k = common_layers.shape_list(q)
-        depth_v = common_layers.shape_list(v)[-1]
-        if isinstance(block_length, tf.Tensor):
-            const = contrib.util().constant_value(block_length)
-            if const is not None:
-                block_length = int(const)
-        # If (length < 2 * block_length), then we use only one block.
-        if isinstance(length, int) and isinstance(block_length, int):
-            block_length = length if length < block_length * 2 else block_length
-        else:
-            block_length = tf.where(
-                tf.less(length, block_length * 2), length, block_length
-            )
-
-        # Pad query, key, value to ensure multiple of block length.
-        original_length = length
-        padding_size = tf.mod(-length, block_length)
-        length += padding_size
-        padding = [[0, 0], [0, 0], [0, padding_size], [0, 0]]
-        q = tf.pad(q, padding)
-        k = tf.pad(k, padding)
-        v = tf.pad(v, padding)
-
-        if isinstance(length, int) and isinstance(block_length, int):
-            num_blocks = length // block_length
-        else:
-            num_blocks = tf.div(length, block_length)
-
-        # Compute attention for the first query block.
-        first_q = tf.slice(q, [0, 0, 0, 0], [-1, -1, block_length, -1])
-        first_k = tf.slice(k, [0, 0, 0, 0], [-1, -1, block_length, -1])
-        first_v = tf.slice(v, [0, 0, 0, 0], [-1, -1, block_length, -1])
-
-        first_output = dot_product_attention(
-            first_q,
-            first_k,
-            first_v,
-            attention_bias_lower_triangle(block_length),
-            dropout_rate=dropout_rate,
-            name="first_block",
+    batch, heads, length, depth_k = common_layers.shape_list(q)
+    depth_v = common_layers.shape_list(v)[-1]
+    if isinstance(block_length, tf.Tensor):
+        const = contrib.util().constant_value(block_length)
+        if const is not None:
+            block_length = int(const)
+    # If (length < 2 * block_length), then we use only one block.
+    if isinstance(length, int) and isinstance(block_length, int):
+        block_length = length if length < block_length * 2 else block_length
+    else:
+        block_length = tf.where(
+            tf.less(length, block_length * 2), length, block_length
         )
 
-        # Compute attention for all subsequent query blocks.
-        q = tf.reshape(q, [batch, heads, num_blocks, block_length, depth_k])
-        k = tf.reshape(k, [batch, heads, num_blocks, block_length, depth_k])
-        v = tf.reshape(v, [batch, heads, num_blocks, block_length, depth_v])
+    # Pad query, key, value to ensure multiple of block length.
+    original_length = length
+    padding_size = tf.mod(-length, block_length)
+    length += padding_size
+    padding = [[0, 0], [0, 0], [0, padding_size], [0, 0]]
+    q = tf.pad(q, padding)
+    k = tf.pad(k, padding)
+    v = tf.pad(v, padding)
 
-        local_k = _make_local_block(
-            k, depth_k, batch, heads, num_blocks, block_length
-        )
-        local_v = _make_local_block(
-            v, depth_v, batch, heads, num_blocks, block_length
-        )
-        tail_q = tf.slice(q, [0, 0, 1, 0, 0], [-1, -1, -1, -1, -1])
-        tail_q = tf.reshape(
-            tail_q, [batch, heads, num_blocks - 1, block_length, depth_k]
-        )
-        local_length = common_layers.shape_list(local_k)[3]
+    if isinstance(length, int) and isinstance(block_length, int):
+        num_blocks = length // block_length
+    else:
+        num_blocks = tf.div(length, block_length)
 
-        # make sure source_pos <= target_pos
-        good_part = common_layers.ones_matrix_band_part(
-            block_length,
-            local_length,
-            -1,
-            block_length,
-            out_shape=[1, 1, 1, block_length, local_length],
-        )
-        bias = (1.0 - good_part) * -1e9
-        # TODO(noam): figure out how to show a summary for the remaining blocks.
-        # The naive way currently causes errors due to empty tensors.
-        # output: [batch, heads, num_blocks-1, block_length, depth_v]
-        tail_output = dot_product_attention(
-            tail_q,
-            local_k,
-            local_v,
-            bias,
-            dropout_rate=dropout_rate,
-            name="tail_block",
-        )
-        tail_output = tf.reshape(
-            tail_output,
-            [batch, heads, (num_blocks - 1) * block_length, depth_v],
-        )
-        output = tf.concat([first_output, tail_output], axis=2)
+    # Compute attention for the first query block.
+    first_q = tf.slice(q, [0, 0, 0, 0], [-1, -1, block_length, -1])
+    first_k = tf.slice(k, [0, 0, 0, 0], [-1, -1, block_length, -1])
+    first_v = tf.slice(v, [0, 0, 0, 0], [-1, -1, block_length, -1])
 
-        # Remove the padding if introduced.
-        output = tf.slice(output, [0, 0, 0, 0], [-1, -1, original_length, -1])
-        output = tf.reshape(output, [batch, heads, original_length, depth_v])
-        return output
+    first_output = dot_product_attention(
+        first_q,
+        first_k,
+        first_v,
+        attention_bias_lower_triangle(block_length),
+        dropout_rate=dropout_rate,
+    )
+
+    # Compute attention for all subsequent query blocks.
+    q = tf.reshape(q, [batch, heads, num_blocks, block_length, depth_k])
+    k = tf.reshape(k, [batch, heads, num_blocks, block_length, depth_k])
+    v = tf.reshape(v, [batch, heads, num_blocks, block_length, depth_v])
+
+    local_k = _make_local_block(
+        k, depth_k, batch, heads, num_blocks, block_length
+    )
+    local_v = _make_local_block(
+        v, depth_v, batch, heads, num_blocks, block_length
+    )
+    tail_q = tf.slice(q, [0, 0, 1, 0, 0], [-1, -1, -1, -1, -1])
+    tail_q = tf.reshape(
+        tail_q, [batch, heads, num_blocks - 1, block_length, depth_k]
+    )
+    local_length = common_layers.shape_list(local_k)[3]
+
+    # make sure source_pos <= target_pos
+    good_part = common_layers.ones_matrix_band_part(
+        block_length,
+        local_length,
+        -1,
+        block_length,
+        out_shape=[1, 1, 1, block_length, local_length],
+    )
+    bias = (1.0 - good_part) * -1e9
+    # TODO(noam): figure out how to show a summary for the remaining blocks.
+    # The naive way currently causes errors due to empty tensors.
+    # output: [batch, heads, num_blocks-1, block_length, depth_v]
+    tail_output = dot_product_attention(
+        tail_q,
+        local_k,
+        local_v,
+        bias,
+        dropout_rate=dropout_rate,
+    )
+    tail_output = tf.reshape(
+        tail_output,
+        [batch, heads, (num_blocks - 1) * block_length, depth_v],
+    )
+    output = tf.concat([first_output, tail_output], axis=2)
+
+    # Remove the padding if introduced.
+    output = tf.slice(output, [0, 0, 0, 0], [-1, -1, original_length, -1])
+    output = tf.reshape(output, [batch, heads, original_length, depth_v])
+    return output
 
 
 def _make_local_block(x, depth, batch, heads, num_blocks, block_length):
@@ -312,7 +300,7 @@ def _make_local_block(x, depth, batch, heads, num_blocks, block_length):
     )
 
 
-def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
+def local_attention_1d(q, k, v, block_length=128, filter_width=100):
     """Strided block local self-attention.
 
     The sequence is divided into blocks of length block_length. Attention for a
@@ -326,112 +314,105 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100, name=None):
       block_length: an integer
       filter_width: an integer indicating how much to look left and right of the
         block.
-      name: an optional string
 
     Returns:
       a Tensor of shape [batch, heads, length, depth_v]
     """
-    with tf.variable_scope(
-        name, default_name="local_self_attention_1d", values=[q, k, v]
-    ):
-        # Check that q, k, v have the same shape except in their depth dimension.
-        q.get_shape()[:-1].assert_is_compatible_with(k.get_shape()[:-1])
-        q.get_shape()[:-1].assert_is_compatible_with(v.get_shape()[:-1])
+    # Check that q, k, v have the same shape except in their depth dimension.
+    q.get_shape()[:-1].assert_is_compatible_with(k.get_shape()[:-1])
+    q.get_shape()[:-1].assert_is_compatible_with(v.get_shape()[:-1])
 
-        batch_size, num_heads, original_length, _ = common_layers.shape_list(q)
+    batch_size, num_heads, original_length, _ = common_layers.shape_list(q)
 
-        # Pad query, key, value to ensure multiple of corresponding lengths.
-        def pad_to_multiple(x, pad_length):
-            x_length = common_layers.shape_list(x)[2]
-            return tf.pad(
-                x, [[0, 0], [0, 0], [0, -x_length % pad_length], [0, 0]]
-            )
+    # Pad query, key, value to ensure multiple of corresponding lengths.
+    def pad_to_multiple(x, pad_length):
+        x_length = common_layers.shape_list(x)[2]
+        return tf.pad(x, [[0, 0], [0, 0], [0, -x_length % pad_length], [0, 0]])
 
-        def pad_l_and_r(x, pad_length):
-            return tf.pad(x, [[0, 0], [0, 0], [pad_length, pad_length], [0, 0]])
+    def pad_l_and_r(x, pad_length):
+        return tf.pad(x, [[0, 0], [0, 0], [pad_length, pad_length], [0, 0]])
 
-        # Set up query blocks.
-        # [batch, heads, blocks_q, block_length, depth_k]
-        q = pad_to_multiple(q, block_length)
-        q = reshape_by_blocks(q, common_layers.shape_list(q), block_length)
-        total_query_blocks = common_layers.shape_list(q)[2]
+    # Set up query blocks.
+    # [batch, heads, blocks_q, block_length, depth_k]
+    q = pad_to_multiple(q, block_length)
+    q = reshape_by_blocks(q, common_layers.shape_list(q), block_length)
+    total_query_blocks = common_layers.shape_list(q)[2]
 
-        # Set up key and value blocks.
-        # [batch, heads, blocks_k, block_length, depth_k]
-        blocks_per_filter_width = filter_width // block_length
-        remaining_items = filter_width % block_length
-        k = pad_to_multiple(k, block_length)
-        v = pad_to_multiple(v, block_length)
-        k = pad_l_and_r(k, filter_width + block_length - remaining_items)
-        v = pad_l_and_r(v, filter_width + block_length - remaining_items)
-        k = reshape_by_blocks(k, common_layers.shape_list(k), block_length)
-        v = reshape_by_blocks(v, common_layers.shape_list(v), block_length)
+    # Set up key and value blocks.
+    # [batch, heads, blocks_k, block_length, depth_k]
+    blocks_per_filter_width = filter_width // block_length
+    remaining_items = filter_width % block_length
+    k = pad_to_multiple(k, block_length)
+    v = pad_to_multiple(v, block_length)
+    k = pad_l_and_r(k, filter_width + block_length - remaining_items)
+    v = pad_l_and_r(v, filter_width + block_length - remaining_items)
+    k = reshape_by_blocks(k, common_layers.shape_list(k), block_length)
+    v = reshape_by_blocks(v, common_layers.shape_list(v), block_length)
 
-        total_kv_blocks = common_layers.shape_list(k)[2]
+    total_kv_blocks = common_layers.shape_list(k)[2]
 
-        slices = []
-        # prepare the left-most and right-most partial blocks if needed
-        if remaining_items:
-            first_partial_block_k = tf.slice(
-                k,
-                [0, 0, 0, block_length - remaining_items, 0],
-                [-1, -1, total_query_blocks, -1, -1],
-            )
-            first_partial_block_v = tf.slice(
-                v,
-                [0, 0, 0, block_length - remaining_items, 0],
-                [-1, -1, total_query_blocks, -1, -1],
-            )
-            last_partial_block_k = tf.slice(
-                k,
-                [0, 0, total_kv_blocks - total_query_blocks, 0, 0],
-                [-1, -1, -1, remaining_items, -1],
-            )
-            last_partial_block_v = tf.slice(
-                v,
-                [0, 0, total_kv_blocks - total_query_blocks, 0, 0],
-                [-1, -1, -1, remaining_items, -1],
-            )
-            slices.append((first_partial_block_k, first_partial_block_v))
-            slices.append((last_partial_block_k, last_partial_block_v))
-
-        # Prepare the rest of the blocks
-        first_block_index = 1 if remaining_items else 0
-        attention_blocks = 2 * blocks_per_filter_width + 1
-        for i in range(first_block_index, attention_blocks + first_block_index):
-            block_k = tf.slice(
-                k, [0, 0, i, 0, 0], [-1, -1, total_query_blocks, -1, -1]
-            )
-            block_v = tf.slice(
-                v, [0, 0, i, 0, 0], [-1, -1, total_query_blocks, -1, -1]
-            )
-            slices.append((block_k, block_v))
-        # [batch, heads, blocks_q, block_length + 2 * filter_width, depth_k]
-        k = tf.concat([s[0] for s in slices], axis=3)
-        v = tf.concat([s[1] for s in slices], axis=3)
-
-        attention_bias = tf.expand_dims(embedding_to_padding(k) * -1e9, axis=-2)
-        depth_v = common_layers.shape_list(v)[-1]
-
-        output = dot_product_attention(
-            q,
+    slices = []
+    # prepare the left-most and right-most partial blocks if needed
+    if remaining_items:
+        first_partial_block_k = tf.slice(
             k,
+            [0, 0, 0, block_length - remaining_items, 0],
+            [-1, -1, total_query_blocks, -1, -1],
+        )
+        first_partial_block_v = tf.slice(
             v,
-            attention_bias,
-            dropout_rate=0.0,
-            name="local_1d",
+            [0, 0, 0, block_length - remaining_items, 0],
+            [-1, -1, total_query_blocks, -1, -1],
         )
-        output = tf.reshape(output, [batch_size, num_heads, -1, depth_v])
+        last_partial_block_k = tf.slice(
+            k,
+            [0, 0, total_kv_blocks - total_query_blocks, 0, 0],
+            [-1, -1, -1, remaining_items, -1],
+        )
+        last_partial_block_v = tf.slice(
+            v,
+            [0, 0, total_kv_blocks - total_query_blocks, 0, 0],
+            [-1, -1, -1, remaining_items, -1],
+        )
+        slices.append((first_partial_block_k, first_partial_block_v))
+        slices.append((last_partial_block_k, last_partial_block_v))
 
-        # Remove the padding if introduced.
-        output = tf.slice(output, [0, 0, 0, 0], [-1, -1, original_length, -1])
-        output.set_shape(
-            [
-                None if isinstance(dim, tf.Tensor) else dim
-                for dim in (batch_size, num_heads, original_length, depth_v)
-            ]
+    # Prepare the rest of the blocks
+    first_block_index = 1 if remaining_items else 0
+    attention_blocks = 2 * blocks_per_filter_width + 1
+    for i in range(first_block_index, attention_blocks + first_block_index):
+        block_k = tf.slice(
+            k, [0, 0, i, 0, 0], [-1, -1, total_query_blocks, -1, -1]
         )
-        return output
+        block_v = tf.slice(
+            v, [0, 0, i, 0, 0], [-1, -1, total_query_blocks, -1, -1]
+        )
+        slices.append((block_k, block_v))
+    # [batch, heads, blocks_q, block_length + 2 * filter_width, depth_k]
+    k = tf.concat([s[0] for s in slices], axis=3)
+    v = tf.concat([s[1] for s in slices], axis=3)
+
+    attention_bias = tf.expand_dims(embedding_to_padding(k) * -1e9, axis=-2)
+    depth_v = common_layers.shape_list(v)[-1]
+
+    output = dot_product_attention(
+        q,
+        k,
+        v,
+        attention_bias,
+        dropout_rate=0.0,
+    )
+    output = tf.reshape(output, [batch_size, num_heads, -1, depth_v])
+
+    # Remove the padding if introduced.
+    output = tf.slice(output, [0, 0, 0, 0], [-1, -1, original_length, -1])
+    output.set_shape(
+        [
+            None if isinstance(dim, tf.Tensor) else dim
+            for dim in (batch_size, num_heads, original_length, depth_v)
+        ]
+    )
+    return output
 
 
 def reshape_by_blocks(x, x_shape, memory_block_size):
@@ -459,9 +440,7 @@ def reshape_by_blocks(x, x_shape, memory_block_size):
     return x
 
 
-def local_attention_2d(
-    q, k, v, query_shape=(8, 16), memory_flange=(8, 16), name=None
-):
+def local_attention_2d(q, k, v, query_shape=(8, 16), memory_flange=(8, 16)):
     """Strided block local self-attention.
 
     The 2-D sequence is divided into 2-D blocks of shape query_shape. Attention
@@ -478,63 +457,58 @@ def local_attention_2d(
       query_shape: an tuple indicating the height and width of each query block.
       memory_flange: an integer indicating how much to look in height and width
         from each query block.
-      name: an optional string
 
     Returns:
       a Tensor of shape [batch, heads, h, w, depth_v]
     """
-    with tf.variable_scope(
-        name, default_name="local_self_attention_2d", values=[q, k, v]
-    ):
-        v_shape = common_layers.shape_list(v)
+    v_shape = common_layers.shape_list(v)
 
-        # Pad query, key, value to ensure multiple of corresponding lengths.
-        q = pad_to_multiple_2d(q, query_shape)
-        k = pad_to_multiple_2d(k, query_shape)
-        v = pad_to_multiple_2d(v, query_shape)
-        paddings = [
-            [0, 0],
-            [0, 0],
-            [memory_flange[0], memory_flange[1]],
-            [memory_flange[0], memory_flange[1]],
-            [0, 0],
-        ]
-        k = tf.pad(k, paddings)
-        v = tf.pad(v, paddings)
+    # Pad query, key, value to ensure multiple of corresponding lengths.
+    q = pad_to_multiple_2d(q, query_shape)
+    k = pad_to_multiple_2d(k, query_shape)
+    v = pad_to_multiple_2d(v, query_shape)
+    paddings = [
+        [0, 0],
+        [0, 0],
+        [memory_flange[0], memory_flange[1]],
+        [memory_flange[0], memory_flange[1]],
+        [0, 0],
+    ]
+    k = tf.pad(k, paddings)
+    v = tf.pad(v, paddings)
 
-        # Set up query blocks.
-        q_indices = gather_indices_2d(q, query_shape, query_shape)
-        q_new = gather_blocks_2d(q, q_indices)
+    # Set up query blocks.
+    q_indices = gather_indices_2d(q, query_shape, query_shape)
+    q_new = gather_blocks_2d(q, q_indices)
 
-        # Set up key and value blocks.
-        memory_shape = (
-            query_shape[0] + 2 * memory_flange[0],
-            query_shape[1] + 2 * memory_flange[1],
-        )
-        k_and_v_indices = gather_indices_2d(k, memory_shape, query_shape)
-        k_new = gather_blocks_2d(k, k_and_v_indices)
-        v_new = gather_blocks_2d(v, k_and_v_indices)
+    # Set up key and value blocks.
+    memory_shape = (
+        query_shape[0] + 2 * memory_flange[0],
+        query_shape[1] + 2 * memory_flange[1],
+    )
+    k_and_v_indices = gather_indices_2d(k, memory_shape, query_shape)
+    k_new = gather_blocks_2d(k, k_and_v_indices)
+    v_new = gather_blocks_2d(v, k_and_v_indices)
 
-        attention_bias = tf.expand_dims(
-            tf.to_float(embedding_to_padding(k_new)) * -1e9, axis=-2
-        )
-        output = dot_product_attention(
-            q_new,
-            k_new,
-            v_new,
-            attention_bias,
-            dropout_rate=0.0,
-            name="local_2d",
-        )
-        # Put representations back into original shapes.
-        padded_q_shape = common_layers.shape_list(q)
-        output = scatter_blocks_2d(output, q_indices, padded_q_shape)
+    attention_bias = tf.expand_dims(
+        tf.to_float(embedding_to_padding(k_new)) * -1e9, axis=-2
+    )
+    output = dot_product_attention(
+        q_new,
+        k_new,
+        v_new,
+        attention_bias,
+        dropout_rate=0.0,
+    )
+    # Put representations back into original shapes.
+    padded_q_shape = common_layers.shape_list(q)
+    output = scatter_blocks_2d(output, q_indices, padded_q_shape)
 
-        # Remove the padding if introduced.
-        output = tf.slice(
-            output, [0, 0, 0, 0, 0], [-1, -1, v_shape[2], v_shape[3], -1]
-        )
-        return output
+    # Remove the padding if introduced.
+    output = tf.slice(
+        output, [0, 0, 0, 0, 0], [-1, -1, v_shape[2], v_shape[3], -1]
+    )
+    return output
 
 
 def pad_to_multiple_2d(x, block_shape):
@@ -697,7 +671,7 @@ def get_memory_region(x, query_block_shape, memory_flange, q_indices):
 
 
 def masked_local_attention_2d(
-    q, k, v, query_shape=(8, 16), memory_flange=(8, 16), name=None
+    q, k, v, query_shape=(8, 16), memory_flange=(8, 16)
 ):
     """Strided block local self-attention.
 
@@ -718,79 +692,74 @@ def masked_local_attention_2d(
       memory_flange: an integer indicating how much to look in height and width
         from each query block.
         memory shape = query_shape + (block_flange[0], 2*block_flange[1])
-      name: an optional string
 
     Returns:
       a Tensor of shape [batch, heads, h, w, depth_v]
     """
-    with tf.variable_scope(
-        name, default_name="local_masked_self_attention_2d", values=[q, k, v]
-    ):
-        v_shape = common_layers.shape_list(v)
+    v_shape = common_layers.shape_list(v)
 
-        # Pad query to ensure multiple of corresponding lengths.
-        q = pad_to_multiple_2d(q, query_shape)
+    # Pad query to ensure multiple of corresponding lengths.
+    q = pad_to_multiple_2d(q, query_shape)
 
-        # Set up query blocks.
-        q_indices = gather_indices_2d(q, query_shape, query_shape)
-        q_new = gather_blocks_2d(q, q_indices)
+    # Set up query blocks.
+    q_indices = gather_indices_2d(q, query_shape, query_shape)
+    q_new = gather_blocks_2d(q, q_indices)
 
-        # Set up key and value blocks.
-        k_flange, k_center = get_memory_region(
-            k, query_shape, memory_flange, q_indices
-        )
-        v_flange, v_center = get_memory_region(
-            v, query_shape, memory_flange, q_indices
-        )
-        if k_flange is not None:
-            k_new = tf.concat([k_flange, k_center], axis=3)
-            v_new = tf.concat([v_flange, v_center], axis=3)
-        else:
-            k_new = k_center
-            v_new = v_center
+    # Set up key and value blocks.
+    k_flange, k_center = get_memory_region(
+        k, query_shape, memory_flange, q_indices
+    )
+    v_flange, v_center = get_memory_region(
+        v, query_shape, memory_flange, q_indices
+    )
+    if k_flange is not None:
+        k_new = tf.concat([k_flange, k_center], axis=3)
+        v_new = tf.concat([v_flange, v_center], axis=3)
+    else:
+        k_new = k_center
+        v_new = v_center
 
-        # Set up the masks.
-        query_elements = np.prod(query_shape)
-        padding_mask = None
-        if k_flange is not None:
-            padding_mask = tf.expand_dims(
-                embedding_to_padding(k_flange) * -1e9, axis=-2
-            )
-            padding_mask = tf.tile(padding_mask, [1, 1, 1, query_elements, 1])
+    # Set up the masks.
+    query_elements = np.prod(query_shape)
+    padding_mask = None
+    if k_flange is not None:
+        padding_mask = tf.expand_dims(
+            embedding_to_padding(k_flange) * -1e9, axis=-2
+        )
+        padding_mask = tf.tile(padding_mask, [1, 1, 1, query_elements, 1])
 
-        center_attention_bias = attention_bias_lower_triangle(
-            np.prod(query_elements)
+    center_attention_bias = attention_bias_lower_triangle(
+        np.prod(query_elements)
+    )
+    center_attention_bias = tf.reshape(
+        center_attention_bias, [1, 1, 1, query_elements, query_elements]
+    )
+    v_center_shape = common_layers.shape_list(v_center)
+    center_attention_bias = tf.tile(
+        center_attention_bias,
+        [v_center_shape[0], v_center_shape[1], v_center_shape[2], 1, 1],
+    )
+    if padding_mask is not None:
+        # Combine the mask for padding and visible region.
+        attention_bias = tf.concat(
+            [padding_mask, center_attention_bias], axis=4
         )
-        center_attention_bias = tf.reshape(
-            center_attention_bias, [1, 1, 1, query_elements, query_elements]
-        )
-        v_center_shape = common_layers.shape_list(v_center)
-        center_attention_bias = tf.tile(
-            center_attention_bias,
-            [v_center_shape[0], v_center_shape[1], v_center_shape[2], 1, 1],
-        )
-        if padding_mask is not None:
-            # Combine the mask for padding and visible region.
-            attention_bias = tf.concat(
-                [padding_mask, center_attention_bias], axis=4
-            )
-        else:
-            attention_bias = center_attention_bias
+    else:
+        attention_bias = center_attention_bias
 
-        output = dot_product_attention(
-            q_new,
-            k_new,
-            v_new,
-            attention_bias,
-            dropout_rate=0.0,
-            name="masked_local_2d",
-        )
-        # Put representations back into original shapes.
-        padded_q_shape = common_layers.shape_list(q)
-        output = scatter_blocks_2d(output, q_indices, padded_q_shape)
+    output = dot_product_attention(
+        q_new,
+        k_new,
+        v_new,
+        attention_bias,
+        dropout_rate=0.0,
+    )
+    # Put representations back into original shapes.
+    padded_q_shape = common_layers.shape_list(q)
+    output = scatter_blocks_2d(output, q_indices, padded_q_shape)
 
-        # Remove the padding if introduced.
-        output = tf.slice(
-            output, [0, 0, 0, 0, 0], [-1, -1, v_shape[2], v_shape[3], -1]
-        )
-        return output
+    # Remove the padding if introduced.
+    output = tf.slice(
+        output, [0, 0, 0, 0, 0], [-1, -1, v_shape[2], v_shape[3], -1]
+    )
+    return output
