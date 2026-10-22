@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  UV_VERSION: "0.9.26"  # matching the uv_build floor in pyproject.toml
+  UV_VERSION: "0.13.5"
   PYTHON_VERSION: "3.11"
 
 jobs:
