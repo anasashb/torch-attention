@@ -182,3 +182,61 @@ def test_attention_bias_lower_triangle_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("query_shape", "key_shape", "value_shape", "bias_shape"),
+    argvalues=[
+        pytest.param(
+            (2, 3, 5, 4),
+            (2, 3, 7, 4),
+            (2, 3, 7, 6),
+            (1, 1, 5, 7),
+            id="shared-bias",
+        ),
+        pytest.param(
+            (2, 3, 2, 4, 4),
+            (2, 3, 2, 8, 4),
+            (2, 3, 2, 8, 6),
+            (2, 3, 2, 1, 8),
+            id="blocked",
+        ),
+    ],
+)
+def test_dot_product_attention_matches_reference(
+    rng: np.random.Generator,
+    query_shape: tuple[int, ...],
+    key_shape: tuple[int, ...],
+    value_shape: tuple[int, ...],
+    bias_shape: tuple[int, ...],
+) -> None:
+    """Checks dot_product_attention against the Tensor2Tensor reference."""
+    q = rng.standard_normal(size=query_shape).astype(dtype=np.float32)
+    k = rng.standard_normal(size=key_shape).astype(dtype=np.float32)
+    v = rng.standard_normal(size=value_shape).astype(dtype=np.float32)
+    bias = np.where(rng.random(size=bias_shape) < 0.25, -1e9, 0.0).astype(
+        dtype=np.float32
+    )
+
+    expected = common_attention.dot_product_attention(
+        q=tf.constant(value=q),
+        k=tf.constant(value=k),
+        v=tf.constant(value=v),
+        bias=tf.constant(value=bias),
+        dropout_rate=0.0,
+        make_image_summary=False,
+    )
+    actual = local_attention.dot_product_attention(
+        q=torch.from_numpy(q),
+        k=torch.from_numpy(k),
+        v=torch.from_numpy(v),
+        bias=torch.from_numpy(bias),
+        dropout_rate=0.0,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=1e-5,
+        atol=1e-5,
+    )
