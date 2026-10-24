@@ -1,13 +1,29 @@
+import importlib
+from types import ModuleType
+
 import numpy as np
 import pytest
 import torch
 
 from adlers.vision import local_attention
 
-tf = pytest.importorskip(modname="tensorflow")
-tf.config.set_visible_devices(devices=[], device_type="GPU")
+pytestmark = pytest.mark.tf_reference
 
-from tests.reference.tensor2tensor import common_attention  # noqa: E402
+
+@pytest.fixture(scope="module")
+def tf() -> ModuleType:
+    """Returns TensorFlow with GPUs hidden, skipping when it is missing."""
+    tensorflow = pytest.importorskip(modname="tensorflow")
+    tensorflow.config.set_visible_devices(devices=[], device_type="GPU")
+    return tensorflow
+
+
+@pytest.fixture(scope="module")
+def common_attention(tf: ModuleType) -> ModuleType:
+    """Returns the Tensor2Tensor reference, after TensorFlow is set up."""
+    return importlib.import_module(
+        name="tests.reference.tensor2tensor.common_attention"
+    )
 
 
 @pytest.fixture
@@ -24,6 +40,8 @@ def rng() -> np.random.Generator:
     ],
 )
 def test_embedding_to_padding_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
     rng: np.random.Generator,
     shape: tuple[int, ...],
 ) -> None:
@@ -60,6 +78,8 @@ def test_embedding_to_padding_matches_reference(
     ],
 )
 def test_ones_matrix_band_part_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
     rows: int,
     cols: int,
     num_lower: int,
@@ -112,6 +132,8 @@ def test_ones_matrix_band_part_matches_reference(
     argvalues=["int", "numpy", "tensor"],
 )
 def test_attention_bias_local_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
     length: int,
     max_backward: int,
     max_forward: int,
@@ -154,6 +176,8 @@ def test_attention_bias_local_matches_reference(
     argvalues=["int", "numpy", "tensor"],
 )
 def test_attention_bias_lower_triangle_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
     length: int,
     length_type: str,
 ) -> None:
@@ -204,6 +228,8 @@ def test_attention_bias_lower_triangle_matches_reference(
     ],
 )
 def test_dot_product_attention_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
     rng: np.random.Generator,
     query_shape: tuple[int, ...],
     key_shape: tuple[int, ...],

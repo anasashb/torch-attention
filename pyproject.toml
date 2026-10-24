@@ -103,4 +103,9 @@ testpaths = ["tests"]
 addopts = [
     "--cov=adlers",
     "--cov-report=term-missing",
+    "-m",
+    "not tf_reference",
+]
+markers = [
+    "tf_reference: TensorFlow equivalence tests, run with -m tf_reference",
 ]
