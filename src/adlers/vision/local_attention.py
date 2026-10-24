@@ -28,6 +28,7 @@ import operator
 
 import numpy as np
 import torch
+from torch.nn import functional as F
 
 
 def ones_matrix_band_part(rows, cols, num_lower, num_upper, out_shape=None):
@@ -167,15 +168,15 @@ def dot_product_attention(
     Returns:
       Tensor with shape [..., length_q, depth_v].
     """
-    logits = tf.matmul(q, k, transpose_b=True)  # [..., length_q, length_kv]
+    logits = torch.matmul(input=q, other=k.mT)  # [..., length_q, length_kv]
     if bias is not None:
-        bias = common_layers.cast_like(bias, logits)
-        logits += bias
-    weights = tf.nn.softmax(logits, name="attention_weights")
-    weights = common_layers.cast_like(weights, q)
+        bias = bias.to(dtype=logits.dtype)
+        logits = logits + bias
+    weights = torch.softmax(input=logits, dim=-1)
+    weights = weights.to(dtype=q.dtype)
     # Drop out attention links for each head.
-    weights = tf.nn.dropout(weights, 1.0 - dropout_rate)
-    return tf.matmul(weights, v)
+    weights = F.dropout(input=weights, p=dropout_rate)
+    return torch.matmul(input=weights, other=v)
 
 
 def masked_local_attention_1d(
