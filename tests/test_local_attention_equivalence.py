@@ -35,6 +35,29 @@ def rng() -> np.random.Generator:
 @pytest.mark.parametrize(
     argnames="shape",
     argvalues=[
+        pytest.param((), id="scalar"),
+        pytest.param((5,), id="vector"),
+        pytest.param((2, 3, 5, 4), id="sequence"),
+        pytest.param((2, 3, 2, 4, 6), id="blocked"),
+    ],
+)
+def test_shape_list_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    shape: tuple[int, ...],
+) -> None:
+    """Checks shape_list against the Tensor2Tensor reference."""
+    x = np.zeros(shape=shape, dtype=np.float32)
+
+    expected = common_attention.shape_list(x=tf.constant(value=x))
+    actual = local_attention.shape_list(x=torch.from_numpy(x))
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    argnames="shape",
+    argvalues=[
         pytest.param((2, 5, 4), id="sequence"),
         pytest.param((2, 3, 2, 4, 6), id="blocked"),
     ],
