@@ -329,3 +329,40 @@ def test_make_local_block_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("shape", "memory_block_size"),
+    argvalues=[
+        pytest.param((2, 3, 8, 5), 4, id="two-blocks"),
+        pytest.param((2, 3, 8, 5), 8, id="one-block"),
+        pytest.param((2, 3, 6, 5), 1, id="unit-blocks"),
+    ],
+)
+def test_reshape_by_blocks_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    shape: tuple[int, ...],
+    memory_block_size: int,
+) -> None:
+    """Checks reshape_by_blocks against the Tensor2Tensor reference."""
+    x = rng.standard_normal(size=shape).astype(dtype=np.float32)
+
+    expected = common_attention.reshape_by_blocks(
+        x=tf.constant(value=x),
+        x_shape=list(shape),
+        memory_block_size=memory_block_size,
+    )
+    actual = local_attention.reshape_by_blocks(
+        x=torch.from_numpy(x),
+        x_shape=list(shape),
+        memory_block_size=memory_block_size,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
