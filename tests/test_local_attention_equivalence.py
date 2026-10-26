@@ -289,3 +289,43 @@ def test_dot_product_attention_matches_reference(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    argnames="shape",
+    argvalues=[
+        pytest.param((2, 3, 1, 4, 5), id="single-block"),
+        pytest.param((2, 3, 2, 4, 5), id="two-blocks"),
+        pytest.param((2, 3, 4, 4, 5), id="four-blocks"),
+    ],
+)
+def test_make_local_block_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    shape: tuple[int, ...],
+) -> None:
+    """Checks _make_local_block against the Tensor2Tensor reference."""
+    x = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    batch, heads, num_blocks, block_length, depth = shape
+    arguments = {
+        "depth": depth,
+        "batch": batch,
+        "heads": heads,
+        "num_blocks": num_blocks,
+        "block_length": block_length,
+    }
+
+    expected = common_attention._make_local_block(
+        x=tf.constant(value=x), **arguments
+    )
+    actual = local_attention._make_local_block(
+        x=torch.from_numpy(x), **arguments
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
