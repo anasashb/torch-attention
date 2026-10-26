@@ -434,9 +434,9 @@ def reshape_by_blocks(x, x_shape, memory_block_size):
       Tensor with shape
       [batch, heads, length // memory_block_size, memory_block_size, depth].
     """
-    x = tf.reshape(
-        x,
-        [
+    x = torch.reshape(
+        input=x,
+        shape=[
             x_shape[0],
             x_shape[1],
             x_shape[2] // memory_block_size,
