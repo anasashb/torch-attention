@@ -298,11 +298,12 @@ def masked_local_attention_1d(
 
 def _make_local_block(x, depth, batch, heads, num_blocks, block_length):
     """Helper function to create a local version of the keys or values for 1d."""
-    prev_block = tf.slice(x, [0, 0, 0, 0, 0], [-1, -1, num_blocks - 1, -1, -1])
-    cur_block = tf.slice(x, [0, 0, 1, 0, 0], [-1, -1, -1, -1, -1])
-    local_block = tf.concat([prev_block, cur_block], 3)
-    return tf.reshape(
-        local_block, [batch, heads, num_blocks - 1, block_length * 2, depth]
+    prev_block = x[:, :, : num_blocks - 1]
+    cur_block = x[:, :, 1:]
+    local_block = torch.cat(tensors=[prev_block, cur_block], dim=3)
+    return torch.reshape(
+        input=local_block,
+        shape=[batch, heads, num_blocks - 1, block_length * 2, depth],
     )
 
 
