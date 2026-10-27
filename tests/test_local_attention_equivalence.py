@@ -366,3 +366,60 @@ def test_reshape_by_blocks_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("length", "block_length"),
+    argvalues=[
+        pytest.param(10, 4, id="padded-blocks"),
+        pytest.param(12, 4, id="whole-blocks"),
+        pytest.param(8, 4, id="two-block-boundary"),
+        pytest.param(5, 4, id="short-single-block"),
+    ],
+)
+@pytest.mark.parametrize(
+    argnames="block_length_type",
+    argvalues=["int", "tensor"],
+)
+def test_masked_local_attention_1d_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    length: int,
+    block_length: int,
+    block_length_type: str,
+) -> None:
+    """Checks masked_local_attention_1d against the Tensor2Tensor reference."""
+    q = rng.standard_normal(size=(2, 3, length, 4)).astype(dtype=np.float32)
+    k = rng.standard_normal(size=(2, 3, length, 4)).astype(dtype=np.float32)
+    v = rng.standard_normal(size=(2, 3, length, 6)).astype(dtype=np.float32)
+    tf_block_lengths = {
+        "int": block_length,
+        "tensor": tf.constant(value=block_length),
+    }
+    torch_block_lengths = {
+        "int": block_length,
+        "tensor": torch.tensor(data=block_length),
+    }
+
+    expected = common_attention.masked_local_attention_1d(
+        q=tf.constant(value=q),
+        k=tf.constant(value=k),
+        v=tf.constant(value=v),
+        block_length=tf_block_lengths[block_length_type],
+        dropout_rate=0.0,
+    )
+    actual = local_attention.masked_local_attention_1d(
+        q=torch.from_numpy(q),
+        k=torch.from_numpy(k),
+        v=torch.from_numpy(v),
+        block_length=torch_block_lengths[block_length_type],
+        dropout_rate=0.0,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=1e-5,
+        atol=1e-5,
+    )
