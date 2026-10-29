@@ -423,3 +423,49 @@ def test_masked_local_attention_1d_matches_reference(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("length", "block_length", "filter_width"),
+    argvalues=[
+        pytest.param(12, 4, 3, id="partial-filter"),
+        pytest.param(10, 4, 3, id="padded-partial-filter"),
+        pytest.param(12, 4, 4, id="whole-block-filter"),
+        pytest.param(12, 4, 5, id="filter-past-one-block"),
+        pytest.param(3, 4, 3, id="short-single-block"),
+    ],
+)
+def test_local_attention_1d_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    length: int,
+    block_length: int,
+    filter_width: int,
+) -> None:
+    """Checks local_attention_1d against the Tensor2Tensor reference."""
+    q = rng.standard_normal(size=(2, 3, length, 4)).astype(dtype=np.float32)
+    k = rng.standard_normal(size=(2, 3, length, 4)).astype(dtype=np.float32)
+    v = rng.standard_normal(size=(2, 3, length, 6)).astype(dtype=np.float32)
+
+    expected = common_attention.local_attention_1d(
+        q=tf.constant(value=q),
+        k=tf.constant(value=k),
+        v=tf.constant(value=v),
+        block_length=block_length,
+        filter_width=filter_width,
+    )
+    actual = local_attention.local_attention_1d(
+        q=torch.from_numpy(q),
+        k=torch.from_numpy(k),
+        v=torch.from_numpy(v),
+        block_length=block_length,
+        filter_width=filter_width,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=1e-5,
+        atol=1e-5,
+    )
