@@ -207,70 +207,77 @@ def masked_local_attention_1d(
     Returns:
       a Tensor of shape [batch, heads, length, depth_v]
     """
-    batch, heads, length, depth_k = common_layers.shape_list(q)
-    depth_v = common_layers.shape_list(v)[-1]
-    if isinstance(block_length, tf.Tensor):
-        const = contrib.util().constant_value(block_length)
-        if const is not None:
-            block_length = int(const)
+    batch, heads, length, depth_k = shape_list(q)
+    depth_v = shape_list(v)[-1]
+    if isinstance(block_length, torch.Tensor):
+        block_length = int(block_length)
     # If (length < 2 * block_length), then we use only one block.
-    if isinstance(length, int) and isinstance(block_length, int):
-        block_length = length if length < block_length * 2 else block_length
-    else:
-        block_length = tf.where(
-            tf.less(length, block_length * 2), length, block_length
-        )
+    block_length = length if length < block_length * 2 else block_length
 
     # Pad query, key, value to ensure multiple of block length.
     original_length = length
-    padding_size = tf.mod(-length, block_length)
+    padding_size = -length % block_length
     length += padding_size
-    padding = [[0, 0], [0, 0], [0, padding_size], [0, 0]]
-    q = tf.pad(q, padding)
-    k = tf.pad(k, padding)
-    v = tf.pad(v, padding)
+    padding = (0, 0, 0, padding_size)
+    q = F.pad(input=q, pad=padding)
+    k = F.pad(input=k, pad=padding)
+    v = F.pad(input=v, pad=padding)
 
-    if isinstance(length, int) and isinstance(block_length, int):
-        num_blocks = length // block_length
-    else:
-        num_blocks = tf.div(length, block_length)
+    num_blocks = length // block_length
 
     # Compute attention for the first query block.
-    first_q = tf.slice(q, [0, 0, 0, 0], [-1, -1, block_length, -1])
-    first_k = tf.slice(k, [0, 0, 0, 0], [-1, -1, block_length, -1])
-    first_v = tf.slice(v, [0, 0, 0, 0], [-1, -1, block_length, -1])
+    first_q = q[:, :, :block_length]
+    first_k = k[:, :, :block_length]
+    first_v = v[:, :, :block_length]
 
     first_output = dot_product_attention(
-        first_q,
-        first_k,
-        first_v,
-        attention_bias_lower_triangle(block_length),
+        q=first_q,
+        k=first_k,
+        v=first_v,
+        bias=attention_bias_lower_triangle(length=block_length),
         dropout_rate=dropout_rate,
     )
 
     # Compute attention for all subsequent query blocks.
-    q = tf.reshape(q, [batch, heads, num_blocks, block_length, depth_k])
-    k = tf.reshape(k, [batch, heads, num_blocks, block_length, depth_k])
-    v = tf.reshape(v, [batch, heads, num_blocks, block_length, depth_v])
+    q = torch.reshape(
+        input=q, shape=[batch, heads, num_blocks, block_length, depth_k]
+    )
+    k = torch.reshape(
+        input=k, shape=[batch, heads, num_blocks, block_length, depth_k]
+    )
+    v = torch.reshape(
+        input=v, shape=[batch, heads, num_blocks, block_length, depth_v]
+    )
 
     local_k = _make_local_block(
-        k, depth_k, batch, heads, num_blocks, block_length
+        x=k,
+        depth=depth_k,
+        batch=batch,
+        heads=heads,
+        num_blocks=num_blocks,
+        block_length=block_length,
     )
     local_v = _make_local_block(
-        v, depth_v, batch, heads, num_blocks, block_length
+        x=v,
+        depth=depth_v,
+        batch=batch,
+        heads=heads,
+        num_blocks=num_blocks,
+        block_length=block_length,
     )
-    tail_q = tf.slice(q, [0, 0, 1, 0, 0], [-1, -1, -1, -1, -1])
-    tail_q = tf.reshape(
-        tail_q, [batch, heads, num_blocks - 1, block_length, depth_k]
+    tail_q = q[:, :, 1:]
+    tail_q = torch.reshape(
+        input=tail_q,
+        shape=[batch, heads, num_blocks - 1, block_length, depth_k],
     )
-    local_length = common_layers.shape_list(local_k)[3]
+    local_length = shape_list(local_k)[3]
 
     # make sure source_pos <= target_pos
-    good_part = common_layers.ones_matrix_band_part(
-        block_length,
-        local_length,
-        -1,
-        block_length,
+    good_part = ones_matrix_band_part(
+        rows=block_length,
+        cols=local_length,
+        num_lower=-1,
+        num_upper=block_length,
         out_shape=[1, 1, 1, block_length, local_length],
     )
     bias = (1.0 - good_part) * -1e9
@@ -278,21 +285,23 @@ def masked_local_attention_1d(
     # The naive way currently causes errors due to empty tensors.
     # output: [batch, heads, num_blocks-1, block_length, depth_v]
     tail_output = dot_product_attention(
-        tail_q,
-        local_k,
-        local_v,
-        bias,
+        q=tail_q,
+        k=local_k,
+        v=local_v,
+        bias=bias,
         dropout_rate=dropout_rate,
     )
-    tail_output = tf.reshape(
-        tail_output,
-        [batch, heads, (num_blocks - 1) * block_length, depth_v],
+    tail_output = torch.reshape(
+        input=tail_output,
+        shape=[batch, heads, (num_blocks - 1) * block_length, depth_v],
     )
-    output = tf.concat([first_output, tail_output], axis=2)
+    output = torch.cat(tensors=[first_output, tail_output], dim=2)
 
     # Remove the padding if introduced.
-    output = tf.slice(output, [0, 0, 0, 0], [-1, -1, original_length, -1])
-    output = tf.reshape(output, [batch, heads, original_length, depth_v])
+    output = output[:, :, :original_length]
+    output = torch.reshape(
+        input=output, shape=[batch, heads, original_length, depth_v]
+    )
     return output
 
 
