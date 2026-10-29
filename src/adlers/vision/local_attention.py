@@ -335,61 +335,71 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100):
       a Tensor of shape [batch, heads, length, depth_v]
     """
     # Check that q, k, v have the same shape except in their depth dimension.
-    q.get_shape()[:-1].assert_is_compatible_with(k.get_shape()[:-1])
-    q.get_shape()[:-1].assert_is_compatible_with(v.get_shape()[:-1])
+    if q.shape[:-1] != k.shape[:-1]:
+        raise ValueError(
+            f"Shapes {tuple(q.shape[:-1])} and {tuple(k.shape[:-1])} are"
+            " incompatible"
+        )
+    if q.shape[:-1] != v.shape[:-1]:
+        raise ValueError(
+            f"Shapes {tuple(q.shape[:-1])} and {tuple(v.shape[:-1])} are"
+            " incompatible"
+        )
 
-    batch_size, num_heads, original_length, _ = common_layers.shape_list(q)
+    batch_size, num_heads, original_length, _ = shape_list(q)
 
     # Pad query, key, value to ensure multiple of corresponding lengths.
     def pad_to_multiple(x, pad_length):
-        x_length = common_layers.shape_list(x)[2]
-        return tf.pad(x, [[0, 0], [0, 0], [0, -x_length % pad_length], [0, 0]])
+        x_length = shape_list(x)[2]
+        return F.pad(input=x, pad=(0, 0, 0, -x_length % pad_length))
 
     def pad_l_and_r(x, pad_length):
-        return tf.pad(x, [[0, 0], [0, 0], [pad_length, pad_length], [0, 0]])
+        return F.pad(input=x, pad=(0, 0, pad_length, pad_length))
 
     # Set up query blocks.
     # [batch, heads, blocks_q, block_length, depth_k]
-    q = pad_to_multiple(q, block_length)
-    q = reshape_by_blocks(q, common_layers.shape_list(q), block_length)
-    total_query_blocks = common_layers.shape_list(q)[2]
+    q = pad_to_multiple(x=q, pad_length=block_length)
+    q = reshape_by_blocks(
+        x=q, x_shape=shape_list(q), memory_block_size=block_length
+    )
+    total_query_blocks = shape_list(q)[2]
 
     # Set up key and value blocks.
     # [batch, heads, blocks_k, block_length, depth_k]
     blocks_per_filter_width = filter_width // block_length
     remaining_items = filter_width % block_length
-    k = pad_to_multiple(k, block_length)
-    v = pad_to_multiple(v, block_length)
-    k = pad_l_and_r(k, filter_width + block_length - remaining_items)
-    v = pad_l_and_r(v, filter_width + block_length - remaining_items)
-    k = reshape_by_blocks(k, common_layers.shape_list(k), block_length)
-    v = reshape_by_blocks(v, common_layers.shape_list(v), block_length)
+    k = pad_to_multiple(x=k, pad_length=block_length)
+    v = pad_to_multiple(x=v, pad_length=block_length)
+    k = pad_l_and_r(
+        x=k, pad_length=filter_width + block_length - remaining_items
+    )
+    v = pad_l_and_r(
+        x=v, pad_length=filter_width + block_length - remaining_items
+    )
+    k = reshape_by_blocks(
+        x=k, x_shape=shape_list(k), memory_block_size=block_length
+    )
+    v = reshape_by_blocks(
+        x=v, x_shape=shape_list(v), memory_block_size=block_length
+    )
 
-    total_kv_blocks = common_layers.shape_list(k)[2]
+    total_kv_blocks = shape_list(k)[2]
 
     slices = []
     # prepare the left-most and right-most partial blocks if needed
     if remaining_items:
-        first_partial_block_k = tf.slice(
-            k,
-            [0, 0, 0, block_length - remaining_items, 0],
-            [-1, -1, total_query_blocks, -1, -1],
-        )
-        first_partial_block_v = tf.slice(
-            v,
-            [0, 0, 0, block_length - remaining_items, 0],
-            [-1, -1, total_query_blocks, -1, -1],
-        )
-        last_partial_block_k = tf.slice(
-            k,
-            [0, 0, total_kv_blocks - total_query_blocks, 0, 0],
-            [-1, -1, -1, remaining_items, -1],
-        )
-        last_partial_block_v = tf.slice(
-            v,
-            [0, 0, total_kv_blocks - total_query_blocks, 0, 0],
-            [-1, -1, -1, remaining_items, -1],
-        )
+        first_partial_block_k = k[
+            :, :, :total_query_blocks, block_length - remaining_items :
+        ]
+        first_partial_block_v = v[
+            :, :, :total_query_blocks, block_length - remaining_items :
+        ]
+        last_partial_block_k = k[
+            :, :, total_kv_blocks - total_query_blocks :, :remaining_items
+        ]
+        last_partial_block_v = v[
+            :, :, total_kv_blocks - total_query_blocks :, :remaining_items
+        ]
         slices.append((first_partial_block_k, first_partial_block_v))
         slices.append((last_partial_block_k, last_partial_block_v))
 
@@ -397,37 +407,31 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100):
     first_block_index = 1 if remaining_items else 0
     attention_blocks = 2 * blocks_per_filter_width + 1
     for i in range(first_block_index, attention_blocks + first_block_index):
-        block_k = tf.slice(
-            k, [0, 0, i, 0, 0], [-1, -1, total_query_blocks, -1, -1]
-        )
-        block_v = tf.slice(
-            v, [0, 0, i, 0, 0], [-1, -1, total_query_blocks, -1, -1]
-        )
+        block_k = k[:, :, i : i + total_query_blocks]
+        block_v = v[:, :, i : i + total_query_blocks]
         slices.append((block_k, block_v))
     # [batch, heads, blocks_q, block_length + 2 * filter_width, depth_k]
-    k = tf.concat([s[0] for s in slices], axis=3)
-    v = tf.concat([s[1] for s in slices], axis=3)
+    k = torch.cat(tensors=[s[0] for s in slices], dim=3)
+    v = torch.cat(tensors=[s[1] for s in slices], dim=3)
 
-    attention_bias = tf.expand_dims(embedding_to_padding(k) * -1e9, axis=-2)
-    depth_v = common_layers.shape_list(v)[-1]
+    attention_bias = torch.unsqueeze(
+        input=embedding_to_padding(emb=k) * -1e9, dim=-2
+    )
+    depth_v = shape_list(v)[-1]
 
     output = dot_product_attention(
-        q,
-        k,
-        v,
-        attention_bias,
+        q=q,
+        k=k,
+        v=v,
+        bias=attention_bias,
         dropout_rate=0.0,
     )
-    output = tf.reshape(output, [batch_size, num_heads, -1, depth_v])
+    output = torch.reshape(
+        input=output, shape=[batch_size, num_heads, -1, depth_v]
+    )
 
     # Remove the padding if introduced.
-    output = tf.slice(output, [0, 0, 0, 0], [-1, -1, original_length, -1])
-    output.set_shape(
-        [
-            None if isinstance(dim, tf.Tensor) else dim
-            for dim in (batch_size, num_heads, original_length, depth_v)
-        ]
-    )
+    output = output[:, :, :original_length]
     return output
 
 
