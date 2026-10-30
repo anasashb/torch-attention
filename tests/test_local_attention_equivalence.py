@@ -469,3 +469,37 @@ def test_local_attention_1d_matches_reference(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("shape", "block_shape"),
+    argvalues=[
+        pytest.param((2, 5, 6, 3), (2, 4), id="4d-padded"),
+        pytest.param((2, 4, 8, 3), (2, 4), id="4d-whole"),
+        pytest.param((2, 3, 5, 6, 4), (2, 4), id="5d-padded"),
+        pytest.param((2, 3, 6, 8, 4), (3, 4), id="5d-whole"),
+    ],
+)
+def test_pad_to_multiple_2d_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    shape: tuple[int, ...],
+    block_shape: tuple[int, int],
+) -> None:
+    """Checks pad_to_multiple_2d against the Tensor2Tensor reference."""
+    x = rng.standard_normal(size=shape).astype(dtype=np.float32)
+
+    expected = common_attention.pad_to_multiple_2d(
+        x=tf.constant(value=x), block_shape=block_shape
+    )
+    actual = local_attention.pad_to_multiple_2d(
+        x=torch.from_numpy(x), block_shape=block_shape
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
