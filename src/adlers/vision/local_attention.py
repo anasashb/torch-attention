@@ -541,27 +541,17 @@ def pad_to_multiple_2d(x, block_shape):
     Returns:
       padded_x: a [batch, heads, h, w, depth] or [batch, h, w, depth] tensor
     """
-    old_shape = x.get_shape().dims
-    last = old_shape[-1]
+    old_shape = list(x.shape)
     if len(old_shape) == 4:
-        height_padding = -common_layers.shape_list(x)[1] % block_shape[0]
-        width_padding = -common_layers.shape_list(x)[2] % block_shape[1]
-        paddings = [[0, 0], [0, height_padding], [0, width_padding], [0, 0]]
+        height_padding = -shape_list(x)[1] % block_shape[0]
+        width_padding = -shape_list(x)[2] % block_shape[1]
+        paddings = (0, 0, 0, width_padding, 0, height_padding, 0, 0)
     elif len(old_shape) == 5:
-        height_padding = -common_layers.shape_list(x)[2] % block_shape[0]
-        width_padding = -common_layers.shape_list(x)[3] % block_shape[1]
-        paddings = [
-            [0, 0],
-            [0, 0],
-            [0, height_padding],
-            [0, width_padding],
-            [0, 0],
-        ]
+        height_padding = -shape_list(x)[2] % block_shape[0]
+        width_padding = -shape_list(x)[3] % block_shape[1]
+        paddings = (0, 0, 0, width_padding, 0, height_padding, 0, 0, 0, 0)
 
-    padded_x = tf.pad(x, paddings)
-    padded_shape = padded_x.get_shape().as_list()
-    padded_shape = padded_shape[:-1] + [last]
-    padded_x.set_shape(padded_shape)
+    padded_x = F.pad(input=x, pad=paddings)
     return padded_x
 
 
