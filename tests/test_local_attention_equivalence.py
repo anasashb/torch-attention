@@ -503,3 +503,37 @@ def test_pad_to_multiple_2d_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("shape", "i", "j", "new_shape"),
+    argvalues=[
+        pytest.param((2, 3, 4, 5, 6), 2, 4, [20], id="merge"),
+        pytest.param((6, 6), 0, 1, [2, 3, 1], id="split"),
+    ],
+)
+def test_reshape_range_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    shape: tuple[int, ...],
+    i: int,
+    j: int,
+    new_shape: list[int],
+) -> None:
+    """Checks reshape_range against the Tensor2Tensor reference."""
+    tensor = rng.standard_normal(size=shape).astype(dtype=np.float32)
+
+    expected = common_attention.reshape_range(
+        tensor=tf.constant(value=tensor), i=i, j=j, shape=new_shape
+    )
+    actual = local_attention.reshape_range(
+        tensor=torch.from_numpy(tensor), i=i, j=j, shape=new_shape
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
