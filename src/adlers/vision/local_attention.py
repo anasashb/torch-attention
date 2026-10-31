@@ -557,9 +557,9 @@ def pad_to_multiple_2d(x, block_shape):
 
 def reshape_range(tensor, i, j, shape):
     """Reshapes a tensor between dimensions i and j."""
-    t_shape = common_layers.shape_list(tensor)
+    t_shape = shape_list(x=tensor)
     target_shape = t_shape[:i] + shape + t_shape[j:]
-    return tf.reshape(tensor, target_shape)
+    return torch.reshape(input=tensor, shape=target_shape)
 
 
 def gather_blocks_2d(x, indices):
