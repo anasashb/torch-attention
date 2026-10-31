@@ -207,8 +207,8 @@ def masked_local_attention_1d(
     Returns:
       a Tensor of shape [batch, heads, length, depth_v]
     """
-    batch, heads, length, depth_k = shape_list(q)
-    depth_v = shape_list(v)[-1]
+    batch, heads, length, depth_k = shape_list(x=q)
+    depth_v = shape_list(x=v)[-1]
     if isinstance(block_length, torch.Tensor):
         block_length = int(block_length)
     # If (length < 2 * block_length), then we use only one block.
@@ -270,7 +270,7 @@ def masked_local_attention_1d(
         input=tail_q,
         shape=[batch, heads, num_blocks - 1, block_length, depth_k],
     )
-    local_length = shape_list(local_k)[3]
+    local_length = shape_list(x=local_k)[3]
 
     # make sure source_pos <= target_pos
     good_part = ones_matrix_band_part(
@@ -346,11 +346,11 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100):
             " incompatible"
         )
 
-    batch_size, num_heads, original_length, _ = shape_list(q)
+    batch_size, num_heads, original_length, _ = shape_list(x=q)
 
     # Pad query, key, value to ensure multiple of corresponding lengths.
     def pad_to_multiple(x, pad_length):
-        x_length = shape_list(x)[2]
+        x_length = shape_list(x=x)[2]
         return F.pad(input=x, pad=(0, 0, 0, -x_length % pad_length))
 
     def pad_l_and_r(x, pad_length):
@@ -360,9 +360,9 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100):
     # [batch, heads, blocks_q, block_length, depth_k]
     q = pad_to_multiple(x=q, pad_length=block_length)
     q = reshape_by_blocks(
-        x=q, x_shape=shape_list(q), memory_block_size=block_length
+        x=q, x_shape=shape_list(x=q), memory_block_size=block_length
     )
-    total_query_blocks = shape_list(q)[2]
+    total_query_blocks = shape_list(x=q)[2]
 
     # Set up key and value blocks.
     # [batch, heads, blocks_k, block_length, depth_k]
@@ -377,13 +377,13 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100):
         x=v, pad_length=filter_width + block_length - remaining_items
     )
     k = reshape_by_blocks(
-        x=k, x_shape=shape_list(k), memory_block_size=block_length
+        x=k, x_shape=shape_list(x=k), memory_block_size=block_length
     )
     v = reshape_by_blocks(
-        x=v, x_shape=shape_list(v), memory_block_size=block_length
+        x=v, x_shape=shape_list(x=v), memory_block_size=block_length
     )
 
-    total_kv_blocks = shape_list(k)[2]
+    total_kv_blocks = shape_list(x=k)[2]
 
     slices = []
     # prepare the left-most and right-most partial blocks if needed
@@ -417,7 +417,7 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100):
     attention_bias = torch.unsqueeze(
         input=embedding_to_padding(emb=k) * -1e9, dim=-2
     )
-    depth_v = shape_list(v)[-1]
+    depth_v = shape_list(x=v)[-1]
 
     output = dot_product_attention(
         q=q,
@@ -543,12 +543,12 @@ def pad_to_multiple_2d(x, block_shape):
     """
     old_shape = list(x.shape)
     if len(old_shape) == 4:
-        height_padding = -shape_list(x)[1] % block_shape[0]
-        width_padding = -shape_list(x)[2] % block_shape[1]
+        height_padding = -shape_list(x=x)[1] % block_shape[0]
+        width_padding = -shape_list(x=x)[2] % block_shape[1]
         paddings = (0, 0, 0, width_padding, 0, height_padding, 0, 0)
     elif len(old_shape) == 5:
-        height_padding = -shape_list(x)[2] % block_shape[0]
-        width_padding = -shape_list(x)[3] % block_shape[1]
+        height_padding = -shape_list(x=x)[2] % block_shape[0]
+        width_padding = -shape_list(x=x)[3] % block_shape[1]
         paddings = (0, 0, 0, width_padding, 0, height_padding, 0, 0, 0, 0)
 
     padded_x = F.pad(input=x, pad=paddings)
