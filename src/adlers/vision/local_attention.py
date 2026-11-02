@@ -24,6 +24,7 @@
 """Utilities for attention."""
 
 import functools
+import math
 import operator
 
 import numpy as np
@@ -564,13 +565,13 @@ def reshape_range(tensor, i, j, shape):
 
 def gather_blocks_2d(x, indices):
     """Gathers flattened blocks from x."""
-    x_shape = common_layers.shape_list(x)
-    x = reshape_range(x, 2, 4, [tf.reduce_prod(x_shape[2:4])])
+    x_shape = shape_list(x=x)
+    x = reshape_range(tensor=x, i=2, j=4, shape=[math.prod(x_shape[2:4])])
     # [length, batch, heads, dim]
-    x_t = tf.transpose(x, [2, 0, 1, 3])
-    x_new = tf.gather(x_t, indices)
+    x_t = torch.permute(input=x, dims=[2, 0, 1, 3])
+    x_new = x_t[indices]
     # returns [batch, heads, num_blocks, block_length ** 2, dim]
-    return tf.transpose(x_new, [2, 3, 0, 1, 4])
+    return torch.permute(input=x_new, dims=[2, 3, 0, 1, 4])
 
 
 def scatter_blocks_2d(x, indices, shape):
