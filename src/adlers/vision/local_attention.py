@@ -596,26 +596,29 @@ def scatter_blocks_2d(x, indices, shape):
 def gather_indices_2d(x, block_shape, block_stride):
     """Getting gather indices."""
     # making an identity matrix kernel
-    kernel = tf.eye(block_shape[0] * block_shape[1])
-    kernel = reshape_range(kernel, 0, 1, [block_shape[0], block_shape[1], 1])
-    # making indices [1, h, w, 1] to appy convs
-    x_shape = common_layers.shape_list(x)
-    indices = tf.range(x_shape[2] * x_shape[3])
-    indices = tf.reshape(indices, [1, x_shape[2], x_shape[3], 1])
-    indices = tf.nn.conv2d(
-        tf.cast(indices, tf.float32),
-        kernel,
-        strides=[1, block_stride[0], block_stride[1], 1],
-        padding="VALID",
+    kernel = torch.eye(
+        n=block_shape[0] * block_shape[1], dtype=torch.float32, device=x.device
     )
+    kernel = reshape_range(
+        tensor=kernel, i=0, j=1, shape=[block_shape[0], block_shape[1], 1]
+    )
+    # making indices [1, h, w, 1] to appy convs
+    x_shape = shape_list(x=x)
+    indices = torch.arange(end=x_shape[2] * x_shape[3], device=x.device)
+    indices = torch.reshape(input=indices, shape=[1, x_shape[2], x_shape[3], 1])
+    indices = F.conv2d(
+        input=torch.permute(
+            input=indices.to(dtype=torch.float32), dims=[0, 3, 1, 2]
+        ),
+        weight=torch.permute(input=kernel, dims=[3, 2, 0, 1]),
+        stride=block_stride,
+    )
+    indices = torch.permute(input=indices, dims=[0, 2, 3, 1])
     # making indices [num_blocks, dim] to gather
-    dims = common_layers.shape_list(indices)[:3]
-    if all([isinstance(dim, int) for dim in dims]):
-        num_blocks = functools.reduce(operator.mul, dims, 1)
-    else:
-        num_blocks = tf.reduce_prod(dims)
-    indices = tf.reshape(indices, [num_blocks, -1])
-    return tf.cast(indices, tf.int32)
+    dims = shape_list(x=indices)[:3]
+    num_blocks = functools.reduce(operator.mul, dims, 1)
+    indices = torch.reshape(input=indices, shape=[num_blocks, -1])
+    return indices.to(dtype=torch.int32)
 
 
 def get_memory_region(x, query_block_shape, memory_flange, q_indices):
