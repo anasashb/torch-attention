@@ -580,3 +580,56 @@ def test_gather_blocks_2d_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames="indices",
+    argvalues=[
+        pytest.param(
+            [
+                [0, 1, 2, 6, 7, 8],
+                [3, 4, 5, 9, 10, 11],
+                [12, 13, 14, 18, 19, 20],
+                [15, 16, 17, 21, 22, 23],
+            ],
+            id="query-blocks",
+        ),
+        pytest.param(
+            [
+                [0, 1, 2, 6, 7, 8],
+                [3, 4, 5, 9, 10, 11],
+                [12, 13, 14, 18, 19, 20],
+                [15, 16, 17, 21, 0, 1],
+            ],
+            id="repeats-and-gaps",
+        ),
+    ],
+)
+def test_scatter_blocks_2d_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    indices: list[list[int]],
+) -> None:
+    """Checks scatter_blocks_2d against the Tensor2Tensor reference."""
+    x = rng.standard_normal(size=(2, 3, 4, 6, 5)).astype(dtype=np.float32)
+    index_table = np.array(indices, dtype=np.int32)
+    shape = [2, 3, 4, 6, 5]
+
+    expected = common_attention.scatter_blocks_2d(
+        x=tf.constant(value=x),
+        indices=tf.constant(value=index_table),
+        shape=shape,
+    )
+    actual = local_attention.scatter_blocks_2d(
+        x=torch.from_numpy(x),
+        indices=torch.from_numpy(index_table),
+        shape=shape,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
