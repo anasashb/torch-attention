@@ -670,3 +670,70 @@ def test_gather_indices_2d_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames="memory_flange",
+    argvalues=[
+        pytest.param((1, 2), id="top-and-left"),
+        pytest.param((1, 0), id="top-only"),
+        pytest.param((0, 2), id="left-only"),
+        pytest.param((0, 0), id="no-flange"),
+    ],
+)
+@pytest.mark.parametrize(
+    argnames="grid_shape",
+    argvalues=[
+        pytest.param((4, 6), id="whole-grid"),
+        pytest.param((3, 5), id="padded-grid"),
+    ],
+)
+def test_get_memory_region_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    grid_shape: tuple[int, int],
+    memory_flange: tuple[int, int],
+) -> None:
+    """Checks get_memory_region against the Tensor2Tensor reference."""
+    x = rng.standard_normal(size=(2, 3, *grid_shape, 5)).astype(
+        dtype=np.float32
+    )
+    q_indices = np.array(
+        [
+            [0, 1, 2, 6, 7, 8],
+            [3, 4, 5, 9, 10, 11],
+            [12, 13, 14, 18, 19, 20],
+            [15, 16, 17, 21, 22, 23],
+        ],
+        dtype=np.int32,
+    )
+
+    expected_flange, expected_center = common_attention.get_memory_region(
+        x=tf.constant(value=x),
+        query_block_shape=(2, 3),
+        memory_flange=memory_flange,
+        q_indices=tf.constant(value=q_indices),
+    )
+    actual_flange, actual_center = local_attention.get_memory_region(
+        x=torch.from_numpy(x),
+        query_block_shape=(2, 3),
+        memory_flange=memory_flange,
+        q_indices=torch.from_numpy(q_indices),
+    )
+
+    torch.testing.assert_close(
+        actual=actual_center,
+        expected=torch.from_numpy(expected_center.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
+    if expected_flange is None:
+        assert actual_flange is None
+    else:
+        torch.testing.assert_close(
+            actual=actual_flange,
+            expected=torch.from_numpy(expected_flange.numpy()),
+            rtol=0.0,
+            atol=0.0,
+        )
