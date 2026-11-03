@@ -576,16 +576,21 @@ def gather_blocks_2d(x, indices):
 
 def scatter_blocks_2d(x, indices, shape):
     """scatters blocks from x into shape with indices."""
-    x_shape = common_layers.shape_list(x)
+    x_shape = shape_list(x=x)
     # [length, batch, heads, dim]
-    x_t = tf.transpose(
-        tf.reshape(x, [x_shape[0], x_shape[1], -1, x_shape[-1]]), [2, 0, 1, 3]
+    x_t = torch.permute(
+        input=torch.reshape(
+            input=x, shape=[x_shape[0], x_shape[1], -1, x_shape[-1]]
+        ),
+        dims=[2, 0, 1, 3],
     )
-    x_t_shape = common_layers.shape_list(x_t)
-    indices = tf.reshape(indices, [-1, 1])
-    scattered_x = tf.scatter_nd(indices, x_t, x_t_shape)
-    scattered_x = tf.transpose(scattered_x, [1, 2, 0, 3])
-    return tf.reshape(scattered_x, shape)
+    x_t_shape = shape_list(x=x_t)
+    indices = torch.reshape(input=indices, shape=[-1])
+    scattered_x = x_t.new_zeros(size=x_t_shape).index_add(
+        dim=0, index=indices, source=x_t
+    )
+    scattered_x = torch.permute(input=scattered_x, dims=[1, 2, 0, 3])
+    return torch.reshape(input=scattered_x, shape=shape)
 
 
 def gather_indices_2d(x, block_shape, block_stride):
