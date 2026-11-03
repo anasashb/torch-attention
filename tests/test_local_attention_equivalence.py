@@ -633,3 +633,40 @@ def test_scatter_blocks_2d_matches_reference(
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("grid_shape", "block_shape", "block_stride"),
+    argvalues=[
+        pytest.param((4, 6), (2, 3), (2, 3), id="query-blocks"),
+        pytest.param((6, 8), (4, 5), (2, 3), id="overlapping-memory"),
+        pytest.param((4, 6), (2, 1), (2, 3), id="narrow-windows"),
+    ],
+)
+def test_gather_indices_2d_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    grid_shape: tuple[int, int],
+    block_shape: tuple[int, int],
+    block_stride: tuple[int, int],
+) -> None:
+    """Checks gather_indices_2d against the Tensor2Tensor reference."""
+    x = np.zeros(shape=(2, 3, *grid_shape, 5), dtype=np.float32)
+
+    expected = common_attention.gather_indices_2d(
+        x=tf.constant(value=x),
+        block_shape=block_shape,
+        block_stride=block_stride,
+    )
+    actual = local_attention.gather_indices_2d(
+        x=torch.from_numpy(x),
+        block_shape=block_shape,
+        block_stride=block_stride,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=0.0,
+        atol=0.0,
+    )
