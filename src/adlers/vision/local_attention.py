@@ -637,8 +637,8 @@ def get_memory_region(x, query_block_shape, memory_flange, q_indices):
     """
     # Padding x to be multiple of query_shape and then
     # extracting the memory blocks from the same regions as the query blocks
-    x_query_padded = pad_to_multiple_2d(x, query_block_shape)
-    x_center = gather_blocks_2d(x_query_padded, q_indices)
+    x_query_padded = pad_to_multiple_2d(x=x, block_shape=query_block_shape)
+    x_center = gather_blocks_2d(x=x_query_padded, indices=q_indices)
     # Then padding the flange region
     paddings = [
         [0, 0],
@@ -647,7 +647,10 @@ def get_memory_region(x, query_block_shape, memory_flange, q_indices):
         [memory_flange[1], memory_flange[1]],
         [0, 0],
     ]
-    x_memory_padded = tf.pad(x_query_padded, paddings)
+    x_memory_padded = F.pad(
+        input=x_query_padded,
+        pad=[size for pair in reversed(paddings) for size in pair],
+    )
     left_x = None
     top_x = None
     # Extracting the memory regions around the query block. left_x_region extends
@@ -664,9 +667,11 @@ def get_memory_region(x, query_block_shape, memory_flange, q_indices):
         ]
         left_memory_shape = (query_block_shape[0], memory_flange[1])
         left_indices = gather_indices_2d(
-            left_x_region, left_memory_shape, query_block_shape
+            x=left_x_region,
+            block_shape=left_memory_shape,
+            block_stride=query_block_shape,
         )
-        left_x = gather_blocks_2d(left_x_region, left_indices)
+        left_x = gather_blocks_2d(x=left_x_region, indices=left_indices)
     # if no top region
     if memory_flange[0] > 0:
         top_x_region = x_memory_padded[:, :, : -query_block_shape[0], :, :]
@@ -677,13 +682,15 @@ def get_memory_region(x, query_block_shape, memory_flange, q_indices):
         )
 
         top_indices = gather_indices_2d(
-            top_x_region, top_memory_shape, query_block_shape
+            x=top_x_region,
+            block_shape=top_memory_shape,
+            block_stride=query_block_shape,
         )
 
-        top_x = gather_blocks_2d(top_x_region, top_indices)
+        top_x = gather_blocks_2d(x=top_x_region, indices=top_indices)
     x_flange = None
     if top_x is not None and left_x is not None:
-        x_flange = tf.concat([top_x, left_x], axis=3)
+        x_flange = torch.cat(tensors=[top_x, left_x], dim=3)
     else:
         x_flange = top_x if top_x is not None else left_x
     return x_flange, x_center
