@@ -482,12 +482,12 @@ def local_attention_2d(q, k, v, query_shape=(8, 16), memory_flange=(8, 16)):
     Returns:
       a Tensor of shape [batch, heads, h, w, depth_v]
     """
-    v_shape = common_layers.shape_list(v)
+    v_shape = shape_list(x=v)
 
     # Pad query, key, value to ensure multiple of corresponding lengths.
-    q = pad_to_multiple_2d(q, query_shape)
-    k = pad_to_multiple_2d(k, query_shape)
-    v = pad_to_multiple_2d(v, query_shape)
+    q = pad_to_multiple_2d(x=q, block_shape=query_shape)
+    k = pad_to_multiple_2d(x=k, block_shape=query_shape)
+    v = pad_to_multiple_2d(x=v, block_shape=query_shape)
     paddings = [
         [0, 0],
         [0, 0],
@@ -495,40 +495,49 @@ def local_attention_2d(q, k, v, query_shape=(8, 16), memory_flange=(8, 16)):
         [memory_flange[0], memory_flange[1]],
         [0, 0],
     ]
-    k = tf.pad(k, paddings)
-    v = tf.pad(v, paddings)
+    k = F.pad(
+        input=k, pad=[size for pair in reversed(paddings) for size in pair]
+    )
+    v = F.pad(
+        input=v, pad=[size for pair in reversed(paddings) for size in pair]
+    )
 
     # Set up query blocks.
-    q_indices = gather_indices_2d(q, query_shape, query_shape)
-    q_new = gather_blocks_2d(q, q_indices)
+    q_indices = gather_indices_2d(
+        x=q, block_shape=query_shape, block_stride=query_shape
+    )
+    q_new = gather_blocks_2d(x=q, indices=q_indices)
 
     # Set up key and value blocks.
     memory_shape = (
         query_shape[0] + 2 * memory_flange[0],
         query_shape[1] + 2 * memory_flange[1],
     )
-    k_and_v_indices = gather_indices_2d(k, memory_shape, query_shape)
-    k_new = gather_blocks_2d(k, k_and_v_indices)
-    v_new = gather_blocks_2d(v, k_and_v_indices)
+    k_and_v_indices = gather_indices_2d(
+        x=k, block_shape=memory_shape, block_stride=query_shape
+    )
+    k_new = gather_blocks_2d(x=k, indices=k_and_v_indices)
+    v_new = gather_blocks_2d(x=v, indices=k_and_v_indices)
 
-    attention_bias = tf.expand_dims(
-        tf.to_float(embedding_to_padding(k_new)) * -1e9, axis=-2
+    attention_bias = torch.unsqueeze(
+        input=embedding_to_padding(emb=k_new).to(dtype=torch.float32) * -1e9,
+        dim=-2,
     )
     output = dot_product_attention(
-        q_new,
-        k_new,
-        v_new,
-        attention_bias,
+        q=q_new,
+        k=k_new,
+        v=v_new,
+        bias=attention_bias,
         dropout_rate=0.0,
     )
     # Put representations back into original shapes.
-    padded_q_shape = common_layers.shape_list(q)
-    output = scatter_blocks_2d(output, q_indices, padded_q_shape)
+    padded_q_shape = shape_list(x=q)
+    output = scatter_blocks_2d(
+        x=output, indices=q_indices, shape=padded_q_shape
+    )
 
     # Remove the padding if introduced.
-    output = tf.slice(
-        output, [0, 0, 0, 0, 0], [-1, -1, v_shape[2], v_shape[3], -1]
-    )
+    output = output[:, :, : v_shape[2], : v_shape[3]]
     return output
 
 
