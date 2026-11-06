@@ -783,3 +783,55 @@ def test_local_attention_2d_matches_reference(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    argnames="memory_flange",
+    argvalues=[
+        pytest.param((1, 2), id="top-and-left"),
+        pytest.param((1, 0), id="top-only"),
+        pytest.param((0, 2), id="left-only"),
+        pytest.param((0, 0), id="no-flange"),
+    ],
+)
+@pytest.mark.parametrize(
+    argnames="grid_shape",
+    argvalues=[
+        pytest.param((4, 6), id="whole-grid"),
+        pytest.param((3, 5), id="padded-grid"),
+    ],
+)
+def test_masked_local_attention_2d_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    grid_shape: tuple[int, int],
+    memory_flange: tuple[int, int],
+) -> None:
+    """Checks masked_local_attention_2d against the Tensor2Tensor reference."""
+    shape = (2, 3, *grid_shape, 4)
+    q = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    k = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    v = rng.standard_normal(size=shape).astype(dtype=np.float32)
+
+    expected = common_attention.masked_local_attention_2d(
+        q=tf.constant(value=q),
+        k=tf.constant(value=k),
+        v=tf.constant(value=v),
+        query_shape=(2, 3),
+        memory_flange=memory_flange,
+    )
+    actual = local_attention.masked_local_attention_2d(
+        q=torch.from_numpy(q),
+        k=torch.from_numpy(k),
+        v=torch.from_numpy(v),
+        query_shape=(2, 3),
+        memory_flange=memory_flange,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()),
+        rtol=1e-5,
+        atol=1e-5,
+    )
