@@ -731,70 +731,81 @@ def masked_local_attention_2d(
     Returns:
       a Tensor of shape [batch, heads, h, w, depth_v]
     """
-    v_shape = common_layers.shape_list(v)
+    v_shape = shape_list(x=v)
 
     # Pad query to ensure multiple of corresponding lengths.
-    q = pad_to_multiple_2d(q, query_shape)
+    q = pad_to_multiple_2d(x=q, block_shape=query_shape)
 
     # Set up query blocks.
-    q_indices = gather_indices_2d(q, query_shape, query_shape)
-    q_new = gather_blocks_2d(q, q_indices)
+    q_indices = gather_indices_2d(
+        x=q, block_shape=query_shape, block_stride=query_shape
+    )
+    q_new = gather_blocks_2d(x=q, indices=q_indices)
 
     # Set up key and value blocks.
     k_flange, k_center = get_memory_region(
-        k, query_shape, memory_flange, q_indices
+        x=k,
+        query_block_shape=query_shape,
+        memory_flange=memory_flange,
+        q_indices=q_indices,
     )
     v_flange, v_center = get_memory_region(
-        v, query_shape, memory_flange, q_indices
+        x=v,
+        query_block_shape=query_shape,
+        memory_flange=memory_flange,
+        q_indices=q_indices,
     )
     if k_flange is not None:
-        k_new = tf.concat([k_flange, k_center], axis=3)
-        v_new = tf.concat([v_flange, v_center], axis=3)
+        k_new = torch.cat(tensors=[k_flange, k_center], dim=3)
+        v_new = torch.cat(tensors=[v_flange, v_center], dim=3)
     else:
         k_new = k_center
         v_new = v_center
 
     # Set up the masks.
-    query_elements = np.prod(query_shape)
+    query_elements = np.prod(a=query_shape)
     padding_mask = None
     if k_flange is not None:
-        padding_mask = tf.expand_dims(
-            embedding_to_padding(k_flange) * -1e9, axis=-2
+        padding_mask = torch.unsqueeze(
+            input=embedding_to_padding(emb=k_flange) * -1e9, dim=-2
         )
-        padding_mask = tf.tile(padding_mask, [1, 1, 1, query_elements, 1])
+        padding_mask = torch.tile(
+            input=padding_mask, dims=[1, 1, 1, query_elements, 1]
+        )
 
     center_attention_bias = attention_bias_lower_triangle(
-        np.prod(query_elements)
+        length=np.prod(a=query_elements)
     )
-    center_attention_bias = tf.reshape(
-        center_attention_bias, [1, 1, 1, query_elements, query_elements]
+    center_attention_bias = torch.reshape(
+        input=center_attention_bias,
+        shape=[1, 1, 1, query_elements, query_elements],
     )
-    v_center_shape = common_layers.shape_list(v_center)
-    center_attention_bias = tf.tile(
-        center_attention_bias,
-        [v_center_shape[0], v_center_shape[1], v_center_shape[2], 1, 1],
+    v_center_shape = shape_list(x=v_center)
+    center_attention_bias = torch.tile(
+        input=center_attention_bias,
+        dims=[v_center_shape[0], v_center_shape[1], v_center_shape[2], 1, 1],
     )
     if padding_mask is not None:
         # Combine the mask for padding and visible region.
-        attention_bias = tf.concat(
-            [padding_mask, center_attention_bias], axis=4
+        attention_bias = torch.cat(
+            tensors=[padding_mask, center_attention_bias], dim=4
         )
     else:
         attention_bias = center_attention_bias
 
     output = dot_product_attention(
-        q_new,
-        k_new,
-        v_new,
-        attention_bias,
+        q=q_new,
+        k=k_new,
+        v=v_new,
+        bias=attention_bias,
         dropout_rate=0.0,
     )
     # Put representations back into original shapes.
-    padded_q_shape = common_layers.shape_list(q)
-    output = scatter_blocks_2d(output, q_indices, padded_q_shape)
+    padded_q_shape = shape_list(x=q)
+    output = scatter_blocks_2d(
+        x=output, indices=q_indices, shape=padded_q_shape
+    )
 
     # Remove the padding if introduced.
-    output = tf.slice(
-        output, [0, 0, 0, 0, 0], [-1, -1, v_shape[2], v_shape[3], -1]
-    )
+    output = output[:, :, : v_shape[2], : v_shape[3]]
     return output
