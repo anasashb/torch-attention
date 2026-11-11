@@ -835,3 +835,69 @@ def test_masked_local_attention_2d_matches_reference(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+@pytest.mark.skipif(
+    condition=not torch.cuda.is_available(), reason="needs a CUDA device"
+)
+@pytest.mark.parametrize(
+    argnames=("function_name", "shape", "options"),
+    argvalues=[
+        pytest.param(
+            "masked_local_attention_1d",
+            (2, 3, 10, 4),
+            {"block_length": 4},
+            id="masked-1d",
+        ),
+        pytest.param(
+            "local_attention_1d",
+            (2, 3, 10, 4),
+            {"block_length": 4, "filter_width": 3},
+            id="local-1d",
+        ),
+        pytest.param(
+            "masked_local_attention_2d",
+            (2, 3, 4, 6, 4),
+            {"query_shape": (2, 3), "memory_flange": (1, 2)},
+            id="masked-2d",
+        ),
+        pytest.param(
+            "local_attention_2d",
+            (2, 3, 6, 10, 4),
+            {"query_shape": (2, 4), "memory_flange": (1, 1)},
+            id="local-2d",
+        ),
+    ],
+)
+def test_local_attention_on_cuda_matches_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    function_name: str,
+    shape: tuple[int, ...],
+    options: dict[str, int | tuple[int, int]],
+) -> None:
+    """Checks local attention on CUDA against TensorFlow on CPU."""
+    q = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    k = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    v = rng.standard_normal(size=shape).astype(dtype=np.float32)
+
+    expected = getattr(common_attention, function_name)(
+        q=tf.constant(value=q),
+        k=tf.constant(value=k),
+        v=tf.constant(value=v),
+        **options,
+    )
+    actual = getattr(local_attention, function_name)(
+        q=torch.from_numpy(q).to(device="cuda"),
+        k=torch.from_numpy(k).to(device="cuda"),
+        v=torch.from_numpy(v).to(device="cuda"),
+        **options,
+    )
+
+    torch.testing.assert_close(
+        actual=actual,
+        expected=torch.from_numpy(expected.numpy()).to(device="cuda"),
+        rtol=1e-5,
+        atol=1e-5,
+    )
