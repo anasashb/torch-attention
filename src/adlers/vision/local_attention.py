@@ -134,25 +134,6 @@ def attention_bias_lower_triangle(length):
     return attention_bias_local(length=length, max_backward=-1, max_forward=0)
 
 
-def split_last_dimension(x, n):
-    """Reshape x so that the last dimension becomes two dimensions.
-
-    The first of these two dimensions is n.
-
-    Args:
-      x: a Tensor with shape [..., m]
-      n: an integer.
-
-    Returns:
-      a Tensor with shape [..., n, m/n]
-    """
-    x_shape = common_layers.shape_list(x)
-    m = x_shape[-1]
-    if isinstance(m, int) and isinstance(n, int):
-        assert m % n == 0
-    return tf.reshape(x, x_shape[:-1] + [n, m // n])
-
-
 def dot_product_attention(
     q,
     k,
