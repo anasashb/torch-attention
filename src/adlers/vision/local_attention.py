@@ -235,7 +235,9 @@ def masked_local_attention_1d(
         q=first_q,
         k=first_k,
         v=first_v,
-        bias=attention_bias_lower_triangle(length=block_length),
+        bias=attention_bias_lower_triangle(length=block_length).to(
+            device=q.device
+        ),
         dropout_rate=dropout_rate,
     )
 
@@ -280,7 +282,7 @@ def masked_local_attention_1d(
         num_lower=-1,
         num_upper=block_length,
         out_shape=[1, 1, 1, block_length, local_length],
-    )
+    ).to(device=q.device)
     bias = (1.0 - good_part) * -1e9
     # TODO(noam): figure out how to show a summary for the remaining blocks.
     # The naive way currently causes errors due to empty tensors.
@@ -775,7 +777,7 @@ def masked_local_attention_2d(
 
     center_attention_bias = attention_bias_lower_triangle(
         length=np.prod(a=query_elements)
-    )
+    ).to(device=q.device)
     center_attention_bias = torch.reshape(
         input=center_attention_bias,
         shape=[1, 1, 1, query_elements, query_elements],
