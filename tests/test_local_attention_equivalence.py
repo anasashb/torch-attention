@@ -901,3 +901,76 @@ def test_local_attention_on_cuda_matches_reference(
         rtol=1e-5,
         atol=1e-5,
     )
+
+
+@pytest.mark.parametrize(
+    argnames=("function_name", "shape", "options"),
+    argvalues=[
+        pytest.param(
+            "masked_local_attention_1d",
+            (2, 3, 10, 4),
+            {"block_length": 4},
+            id="masked-1d",
+        ),
+        pytest.param(
+            "local_attention_1d",
+            (2, 3, 10, 4),
+            {"block_length": 4, "filter_width": 3},
+            id="local-1d",
+        ),
+        pytest.param(
+            "masked_local_attention_2d",
+            (2, 3, 3, 5, 4),
+            {"query_shape": (2, 3), "memory_flange": (1, 2)},
+            id="masked-2d",
+        ),
+        pytest.param(
+            "local_attention_2d",
+            (2, 3, 6, 10, 4),
+            {"query_shape": (2, 4), "memory_flange": (1, 1)},
+            id="local-2d",
+        ),
+    ],
+)
+def test_local_attention_gradients_match_reference(
+    tf: ModuleType,
+    common_attention: ModuleType,
+    rng: np.random.Generator,
+    function_name: str,
+    shape: tuple[int, ...],
+    options: dict[str, int | tuple[int, int]],
+) -> None:
+    """Checks local attention Q, K and V gradients against Tensor2Tensor."""
+    q = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    k = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    v = rng.standard_normal(size=shape).astype(dtype=np.float32)
+    loss_weights = rng.standard_normal(size=shape).astype(dtype=np.float32)
+
+    tf_inputs = [tf.constant(value=array) for array in (q, k, v)]
+    with tf.GradientTape() as tape:
+        tape.watch(tensor=tf_inputs)
+        tf_output = getattr(common_attention, function_name)(
+            q=tf_inputs[0], k=tf_inputs[1], v=tf_inputs[2], **options
+        )
+        tf_loss = tf.reduce_sum(input_tensor=tf_output * loss_weights)
+    tf_gradients = tape.gradient(target=tf_loss, sources=tf_inputs)
+
+    torch_inputs = [
+        torch.from_numpy(array).requires_grad_() for array in (q, k, v)
+    ]
+    torch_output = getattr(local_attention, function_name)(
+        q=torch_inputs[0], k=torch_inputs[1], v=torch_inputs[2], **options
+    )
+    torch_loss = torch.sum(input=torch_output * torch.from_numpy(loss_weights))
+    torch_gradients = torch.autograd.grad(
+        outputs=torch_loss, inputs=torch_inputs
+    )
+
+    torch.testing.assert_close(
+        actual=torch_gradients,
+        expected=tuple(
+            torch.from_numpy(gradient.numpy()) for gradient in tf_gradients
+        ),
+        rtol=1e-4,
+        atol=1e-5,
+    )
