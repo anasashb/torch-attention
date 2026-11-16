@@ -33,13 +33,17 @@ from torch import Tensor
 from torch.nn import functional as F
 
 
-def shape_list(x) -> list[int]:
+def shape_list(x: Tensor) -> list[int]:
     """Return list of dims, statically where possible."""
     return list(x.shape)
 
 
 def ones_matrix_band_part(
-    rows, cols, num_lower, num_upper, out_shape=None
+    rows: int | np.integer | Tensor,
+    cols: int | np.integer | Tensor,
+    num_lower: int | np.integer | Tensor,
+    num_upper: int | np.integer | Tensor,
+    out_shape: list[int | np.integer | Tensor] | None = None,
 ) -> Tensor:
     """Matrix band part of ones.
 
@@ -79,7 +83,7 @@ def ones_matrix_band_part(
     return band
 
 
-def embedding_to_padding(emb) -> Tensor:
+def embedding_to_padding(emb: Tensor) -> Tensor:
     """Calculates the padding mask based on which embeddings are all zero.
 
     We have hacked symbol_modality to return all-zero embeddings for padding.
@@ -95,7 +99,9 @@ def embedding_to_padding(emb) -> Tensor:
     return torch.eq(input=emb_sum, other=0.0).to(dtype=torch.float32)
 
 
-def attention_bias_local(length, max_backward, max_forward) -> Tensor:
+def attention_bias_local(
+    length: int | np.integer | Tensor, max_backward: int, max_forward: int
+) -> Tensor:
     """Create an bias tensor to be added to attention logits.
 
     A position may attend to positions at most max_distance from it,
@@ -123,7 +129,7 @@ def attention_bias_local(length, max_backward, max_forward) -> Tensor:
     return -1e9 * (1.0 - band)
 
 
-def attention_bias_lower_triangle(length) -> Tensor:
+def attention_bias_lower_triangle(length: int | np.integer | Tensor) -> Tensor:
     """Create an bias tensor to be added to attention logits.
 
     Allows a query to attend to all positions up to and including its own.
@@ -138,11 +144,11 @@ def attention_bias_lower_triangle(length) -> Tensor:
 
 
 def dot_product_attention(
-    q,
-    k,
-    v,
-    bias,
-    dropout_rate=0.0,
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    bias: Tensor | None,
+    dropout_rate: float = 0.0,
 ) -> Tensor:
     """Dot-product attention.
 
@@ -170,11 +176,11 @@ def dot_product_attention(
 
 
 def masked_local_attention_1d(
-    q,
-    k,
-    v,
-    block_length=128,
-    dropout_rate=0.0,
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    block_length: int | Tensor = 128,
+    dropout_rate: float = 0.0,
 ) -> Tensor:
     """Attention to the source position and a neighborhood to the left of it.
 
@@ -293,7 +299,12 @@ def masked_local_attention_1d(
 
 
 def _make_local_block(
-    x, depth, batch, heads, num_blocks, block_length
+    x: Tensor,
+    depth: int,
+    batch: int,
+    heads: int,
+    num_blocks: int,
+    block_length: int,
 ) -> Tensor:
     """Helper function to create a local version of the keys or values for 1d."""
     prev_block = x[:, :, : num_blocks - 1]
@@ -305,7 +316,13 @@ def _make_local_block(
     )
 
 
-def local_attention_1d(q, k, v, block_length=128, filter_width=100) -> Tensor:
+def local_attention_1d(
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    block_length: int = 128,
+    filter_width: int = 100,
+) -> Tensor:
     """Strided block local self-attention.
 
     The sequence is divided into blocks of length block_length. Attention for a
@@ -338,11 +355,11 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100) -> Tensor:
     batch_size, num_heads, original_length, _ = shape_list(x=q)
 
     # Pad query, key, value to ensure multiple of corresponding lengths.
-    def pad_to_multiple(x, pad_length) -> Tensor:
+    def pad_to_multiple(x: Tensor, pad_length: int) -> Tensor:
         x_length = shape_list(x=x)[2]
         return F.pad(input=x, pad=(0, 0, 0, -x_length % pad_length))
 
-    def pad_l_and_r(x, pad_length) -> Tensor:
+    def pad_l_and_r(x: Tensor, pad_length: int) -> Tensor:
         return F.pad(input=x, pad=(0, 0, pad_length, pad_length))
 
     # Set up query blocks.
@@ -424,7 +441,9 @@ def local_attention_1d(q, k, v, block_length=128, filter_width=100) -> Tensor:
     return output
 
 
-def reshape_by_blocks(x, x_shape, memory_block_size) -> Tensor:
+def reshape_by_blocks(
+    x: Tensor, x_shape: list[int], memory_block_size: int
+) -> Tensor:
     """Reshapes input by splitting its length over blocks of memory_block_size.
 
     Args:
@@ -450,7 +469,11 @@ def reshape_by_blocks(x, x_shape, memory_block_size) -> Tensor:
 
 
 def local_attention_2d(
-    q, k, v, query_shape=(8, 16), memory_flange=(8, 16)
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    query_shape: tuple[int, int] = (8, 16),
+    memory_flange: tuple[int, int] = (8, 16),
 ) -> Tensor:
     """Strided block local self-attention.
 
@@ -531,7 +554,7 @@ def local_attention_2d(
     return output
 
 
-def pad_to_multiple_2d(x, block_shape) -> Tensor:
+def pad_to_multiple_2d(x: Tensor, block_shape: tuple[int, int]) -> Tensor:
     """Making sure x is a multiple of shape.
 
     Args:
@@ -555,14 +578,14 @@ def pad_to_multiple_2d(x, block_shape) -> Tensor:
     return padded_x
 
 
-def reshape_range(tensor, i, j, shape) -> Tensor:
+def reshape_range(tensor: Tensor, i: int, j: int, shape: list[int]) -> Tensor:
     """Reshapes a tensor between dimensions i and j."""
     t_shape = shape_list(x=tensor)
     target_shape = t_shape[:i] + shape + t_shape[j:]
     return torch.reshape(input=tensor, shape=target_shape)
 
 
-def gather_blocks_2d(x, indices) -> Tensor:
+def gather_blocks_2d(x: Tensor, indices: Tensor) -> Tensor:
     """Gathers flattened blocks from x."""
     x_shape = shape_list(x=x)
     x = reshape_range(tensor=x, i=2, j=4, shape=[math.prod(x_shape[2:4])])
@@ -573,7 +596,7 @@ def gather_blocks_2d(x, indices) -> Tensor:
     return torch.permute(input=x_new, dims=[2, 3, 0, 1, 4])
 
 
-def scatter_blocks_2d(x, indices, shape) -> Tensor:
+def scatter_blocks_2d(x: Tensor, indices: Tensor, shape: list[int]) -> Tensor:
     """scatters blocks from x into shape with indices."""
     x_shape = shape_list(x=x)
     # [length, batch, heads, dim]
@@ -592,7 +615,9 @@ def scatter_blocks_2d(x, indices, shape) -> Tensor:
     return torch.reshape(input=scattered_x, shape=shape)
 
 
-def gather_indices_2d(x, block_shape, block_stride) -> Tensor:
+def gather_indices_2d(
+    x: Tensor, block_shape: tuple[int, int], block_stride: tuple[int, int]
+) -> Tensor:
     """Getting gather indices."""
     # making an identity matrix kernel
     kernel = torch.eye(
@@ -621,7 +646,10 @@ def gather_indices_2d(x, block_shape, block_stride) -> Tensor:
 
 
 def get_memory_region(
-    x, query_block_shape, memory_flange, q_indices
+    x: Tensor,
+    query_block_shape: tuple[int, int],
+    memory_flange: tuple[int, int],
+    q_indices: Tensor,
 ) -> tuple[Tensor | None, Tensor]:
     """Get the memory regions that surround a 2d query.
 
@@ -698,7 +726,11 @@ def get_memory_region(
 
 
 def masked_local_attention_2d(
-    q, k, v, query_shape=(8, 16), memory_flange=(8, 16)
+    q: Tensor,
+    k: Tensor,
+    v: Tensor,
+    query_shape: tuple[int, int] = (8, 16),
+    memory_flange: tuple[int, int] = (8, 16),
 ) -> Tensor:
     """Strided block local self-attention.
 
