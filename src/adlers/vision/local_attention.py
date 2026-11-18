@@ -565,6 +565,7 @@ def pad_to_multiple_2d(x: Tensor, block_shape: tuple[int, int]) -> Tensor:
       padded_x: a [batch, heads, h, w, depth] or [batch, h, w, depth] tensor
     """
     old_shape = list(x.shape)
+    paddings: tuple[int, ...]
     if len(old_shape) == 4:
         height_padding = -shape_list(x=x)[1] % block_shape[0]
         width_padding = -shape_list(x=x)[2] % block_shape[1]
