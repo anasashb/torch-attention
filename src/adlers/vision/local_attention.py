@@ -780,7 +780,7 @@ def masked_local_attention_2d(
         memory_flange=memory_flange,
         q_indices=q_indices,
     )
-    if k_flange is not None:
+    if k_flange is not None and v_flange is not None:
         k_new = torch.cat(tensors=[k_flange, k_center], dim=3)
         v_new = torch.cat(tensors=[v_flange, v_center], dim=3)
     else:
