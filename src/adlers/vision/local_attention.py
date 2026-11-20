@@ -788,7 +788,7 @@ def masked_local_attention_2d(
         v_new = v_center
 
     # Set up the masks.
-    query_elements = np.prod(a=query_shape)
+    query_elements = math.prod(query_shape)
     padding_mask = None
     if k_flange is not None:
         padding_mask = torch.unsqueeze(
