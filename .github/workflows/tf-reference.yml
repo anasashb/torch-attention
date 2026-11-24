@@ -1,0 +1,49 @@
+name: TensorFlow reference
+
+on:
+  pull_request:
+    paths:
+      - "src/adlers/vision/local_attention.py"
+      - "tests/test_local_attention_equivalence.py"
+      - "tests/reference/**"
+      - ".github/workflows/tf-reference.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.5"
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  equivalence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: >-
+          uv sync --no-default-groups --group test --group torch-cpu
+          --group tf-reference --frozen
+
+      - name: Check that TensorFlow imports
+        run: uv run --no-sync python -c "import tensorflow"
+
+      - name: Run TensorFlow equivalence tests
+        run: uv run --no-sync pytest -m tf_reference -ra
