@@ -270,3 +270,50 @@ def test_local_attention_2d_matches_pinned_tensor2tensor_behavior(
         ]
     )
     torch.testing.assert_close(actual=output, expected=expected_output)
+
+
+@pytest.mark.parametrize(
+    argnames="memory_flange",
+    argvalues=[
+        pytest.param((1, 1), id="equal-flange"),
+        pytest.param((1, 2), id="wider-flange"),
+        pytest.param((2, 1), id="taller-flange"),
+    ],
+)
+def test_local_attention_2d_sees_query_block_and_flange(
+    memory_flange: tuple[int, int],
+) -> None:
+    """Checks that each 2D query sees its block plus the flange on all sides."""
+    height, width = 4, 6
+    query_height, query_width = 2, 3
+    positions = height * width
+    shape = (1, 1, height, width, positions)
+    # Zero queries spread weight evenly over every unmasked key, and one-hot
+    # values make each output slot show whether that position was visible.
+    q = torch.zeros(size=shape)
+    k = torch.ones(size=shape)
+    v = torch.reshape(input=torch.eye(n=positions), shape=shape)
+
+    output = local_attention.local_attention_2d(
+        q=q,
+        k=k,
+        v=v,
+        query_shape=(query_height, query_width),
+        memory_flange=memory_flange,
+    )
+
+    rows = torch.arange(end=height)[:, None]
+    cols = torch.arange(end=width)[None, :]
+    for row in range(height):
+        for col in range(width):
+            top = (row // query_height) * query_height - memory_flange[0]
+            left = (col // query_width) * query_width - memory_flange[1]
+            visible = (
+                (rows >= top)
+                & (rows < top + query_height + 2 * memory_flange[0])
+                & (cols >= left)
+                & (cols < left + query_width + 2 * memory_flange[1])
+            )
+            assert torch.equal(
+                input=output[0, 0, row, col] > 0, other=visible.flatten()
+            )
