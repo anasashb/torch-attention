@@ -504,8 +504,8 @@ def local_attention_2d(
     paddings = [
         [0, 0],
         [0, 0],
-        [memory_flange[0], memory_flange[1]],
-        [memory_flange[0], memory_flange[1]],
+        [memory_flange[0], memory_flange[0]],
+        [memory_flange[1], memory_flange[1]],
         [0, 0],
     ]
     k = F.pad(
