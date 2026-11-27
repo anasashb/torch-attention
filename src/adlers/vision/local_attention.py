@@ -410,7 +410,7 @@ def local_attention_1d(
         slices.append((last_partial_block_k, last_partial_block_v))
 
     # Prepare the rest of the blocks
-    first_block_index = 1 if remaining_items else 0
+    first_block_index = 1
     attention_blocks = 2 * blocks_per_filter_width + 1
     for i in range(first_block_index, attention_blocks + first_block_index):
         block_k = k[:, :, i : i + total_query_blocks]
