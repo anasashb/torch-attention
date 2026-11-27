@@ -317,3 +317,38 @@ def test_local_attention_2d_sees_query_block_and_flange(
             assert torch.equal(
                 input=output[0, 0, row, col] > 0, other=visible.flatten()
             )
+
+
+@pytest.mark.parametrize(
+    argnames=("length", "block_length", "filter_width"),
+    argvalues=[
+        pytest.param(12, 4, 3, id="partial-filter"),
+        pytest.param(12, 4, 5, id="filter-past-one-block"),
+        pytest.param(12, 4, 4, id="whole-block-filter"),
+        pytest.param(12, 4, 8, id="two-block-filter"),
+        pytest.param(12, 4, 0, id="no-filter"),
+        pytest.param(10, 4, 4, id="padded-whole-block-filter"),
+    ],
+)
+def test_local_attention_1d_sees_block_and_filter_width(
+    length: int,
+    block_length: int,
+    filter_width: int,
+) -> None:
+    """Checks that each 1D query sees its block plus filter_width each side."""
+    # Zero queries spread weight evenly over every unmasked key, and one-hot
+    # values make each output slot show whether that position was visible.
+    q = torch.zeros(size=(1, 1, length, 1))
+    k = torch.ones(size=(1, 1, length, 1))
+    v = torch.reshape(input=torch.eye(n=length), shape=(1, 1, length, length))
+
+    output = local_attention.local_attention_1d(
+        q=q, k=k, v=v, block_length=block_length, filter_width=filter_width
+    )
+
+    positions = torch.arange(end=length)
+    for position in range(length):
+        start = (position // block_length) * block_length - filter_width
+        end = (position // block_length + 1) * block_length + filter_width
+        visible = (positions >= start) & (positions < end)
+        assert torch.equal(input=output[0, 0, position] > 0, other=visible)

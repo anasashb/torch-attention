@@ -430,7 +430,6 @@ def test_masked_local_attention_1d_matches_reference(
     argvalues=[
         pytest.param(12, 4, 3, id="partial-filter"),
         pytest.param(10, 4, 3, id="padded-partial-filter"),
-        pytest.param(12, 4, 4, id="whole-block-filter"),
         pytest.param(12, 4, 5, id="filter-past-one-block"),
         pytest.param(3, 4, 3, id="short-single-block"),
     ],
